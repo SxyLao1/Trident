@@ -90,13 +90,10 @@ def load_toml_config(config_path: str = "config.toml") -> Dict[str, Any]:
 
         if not config_file.exists():
             raise FileNotFoundError(
-                f"[CONFIG FATAL] 配置文件不存在:
-"
-                f"  尝试路径1: {Path(config_path).resolve()}
-"
-                f"  尝试路径2: {config_file}
-"
-                f"  当前工作目录: {Path.cwd()}"
+                "[CONFIG FATAL] 配置文件不存在: "
+                f"尝试路径1={Path(config_path).resolve()}, "
+                f"尝试路径2={config_file}, "
+                f"当前工作目录={Path.cwd()}"
             )
 
     # 加载 .env 文件（如果存在）
