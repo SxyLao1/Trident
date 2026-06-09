@@ -16,7 +16,7 @@ host = "127.0.0.1"  # 生产环境建议绑定内网IP
 port = 8080
 username = "admin"
 # 密码哈希生成命令：python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('你的密码'))"
-password_hash = "YOUR_HASH_HERE"  # 本地生成: python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))"
+password_hash = "${TRIDENT_PASSWORD_HASH:-YOUR_HASH_HERE}"  # 本地生成: python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))"
 allowed_ips = ["127.0.0.1"]  # v1.7.1新增：IP白名单
 sse_log_levels = ["INFO", "ERROR", "CRITICAL"]  # 前端显示允许的日志级别
 items_per_page = 6  # 可疑清单每页条数
@@ -34,7 +34,7 @@ sse_max_total_clients = 20          # 全局最大连接数（默认20）
 [security]
 csrf_enabled = true  # v1.7.1新增：CSRF开关
 csrf_exclude_paths = ["/api/v1/health"]  # 排除健康检查
-secret_key = "YOUR_SECRET_KEY_HERE"  # 本地生成: python -c "import secrets; print(secrets.token_hex(32))"
+secret_key = "${TRIDENT_SECRET_KEY:-YOUR_SECRET_KEY_HERE}"  # 本地生成: python -c "import secrets; print(secrets.token_hex(32))"
 
 [registry]
 async_save_enabled = true

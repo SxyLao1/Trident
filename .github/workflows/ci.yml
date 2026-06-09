@@ -9,6 +9,10 @@ on:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    env:
+      TRIDENT_SECRET_KEY: ci-test-secret-key-do-not-use-in-production
+      TRIDENT_PASSWORD_HASH: scrypt:32768:8:1$ci-test-hash$ci-test-salt
+      TRIDENT_WEBHOOK_URL: ""
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
