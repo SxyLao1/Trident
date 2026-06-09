@@ -37,14 +37,6 @@ jobs:
         pip install -r requirements.txt
       timeout-minutes: 10
 
-    - name: Generate CI config from template
-      shell: bash
-      run: |
-        if [ ! -f config.toml ]; then
-          cp config.example.toml config.toml
-          echo "Generated config.toml from template"
-        fi
-
     - name: Run syntax checks
       run: |
         python -m py_compile app.py

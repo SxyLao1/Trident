@@ -1,5 +1,4 @@
 # 敏感配置
-config.toml
 *.env
 .env.local
 
