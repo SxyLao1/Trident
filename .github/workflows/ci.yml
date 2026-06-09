@@ -37,6 +37,79 @@ jobs:
         pip install -r requirements.txt
       timeout-minutes: 10
 
+    - name: Generate default config for CI
+      run: |
+        python -c "
+import os
+if not os.path.exists('config.toml'):
+    with open('config.toml', 'w', encoding='utf-8') as f:
+        f.write('''[system]
+')
+        f.write('version = "1.7.8"
+')
+        f.write('name = "Trident"
+')
+        f.write('debug = false
+')
+        f.write('secret_key = "ci-test-key-do-not-use-in-production"
+')
+        f.write('
+')
+        f.write('[website]
+')
+        f.write('path = "/tmp/test_site"
+')
+        f.write('
+')
+        f.write('[monitor]
+')
+        f.write('enabled = true
+')
+        f.write('interval = 5
+')
+        f.write('
+')
+        f.write('[wal]
+')
+        f.write('enabled = true
+')
+        f.write('batch_size = 100
+')
+        f.write('
+')
+        f.write('[alert]
+')
+        f.write('enabled = false
+')
+        f.write('
+')
+        f.write('[web]
+')
+        f.write('host = "127.0.0.1"
+')
+        f.write('port = 8080
+')
+        f.write('allowed_ips = ["127.0.0.1"]
+')
+        f.write('admin_username = "admin"
+')
+        f.write('admin_password_hash = "$scrypt$..."
+')
+        f.write('
+')
+        f.write('[log]
+')
+        f.write('level = "INFO"
+')
+        f.write('max_size = 10485760
+')
+        f.write('backup_count = 5
+')
+        f.write('''')
+    print('Generated config.toml for CI')
+"
+
+
     - name: Run syntax checks
       run: |
         python -m py_compile app.py
