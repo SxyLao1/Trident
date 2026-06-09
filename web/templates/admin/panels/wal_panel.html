@@ -1,0 +1,330 @@
+<div class="wal-dashboard">
+    <!-- 操作结果消息 -->
+    {% if message %}
+    <div class="operation-message {{ message_type }}" id="operation-message">
+        <span class="message-icon">{% if message_type == 'success' %}✓{% else %}✗{% endif %}</span>
+        <span id="message-text">{{ message }}</span>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="operation-message error" id="operation-error">
+        <span class="message-icon">✗</span>
+        <span id="error-text">{{ error }}</span>
+    </div>
+    {% endif %}
+
+    <div class="wal-content-wrapper">
+        <!-- 当前WAL文件状态卡片 -->
+        <div class="wal-current-card">
+            <div class="wal-header">
+                <span class="wal-title">📄 当前WAL文件</span>
+                <span class="wal-status-badge {% if wal_status == 'normal' %}status-ok{% else %}status-warning{% endif %}">
+                    {{ wal_status_text }}
+                </span>
+            </div>
+
+            {% if current_wal %}
+            <div class="wal-info-grid">
+                <div class="info-item">
+                    <label>文件名</label>
+                    <code class="wal-filename">{{ current_wal.name }}</code>
+                </div>
+                <div class="info-item">
+                    <label>大小</label>
+                    <span class="wal-size {% if wal_size_mb > 10 %}size-warning{% endif %}">
+                        {{ "%.2f"|format(wal_size_mb|default(0.0)) }} MB
+                    </span>
+                </div>
+                <div class="info-item">
+                    <label>路径</label>
+                    <small class="wal-path">{{ current_wal.path }}</small>
+                </div>
+            </div>
+            {% else %}
+            <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: #ffaa00; min-height: 200px;">
+                <span class="empty-icon" style="font-size: 48px; margin-bottom: 12px;">📭</span>
+                <p style="font-size: 16px; margin-bottom: 8px;">WAL文件不存在</p>
+                <small style="color: #666;">这通常是首次启动或WAL被清理后的正常状态</small>
+            </div>
+            {% endif %}
+        </div>
+
+        <h3 style="margin: 20px 0 15px 0; color: #00ff00; font-size: 16px; flex-shrink: 0;">📦 归档历史</h3>
+
+        <div class="wal-file-list">
+            {% if files %}
+            {% for file in files %}
+            <div class="wal-file-item">
+                <div class="file-info">
+                    <span class="file-name">{{ file.name }}</span>
+                    <span class="file-size">
+                        {{ "%.2f"|format(file.size_mb|default(0.0)) }}MB
+                    </span>
+                </div>
+                <span class="file-time">{{ file.mtime|default('未知') }}</span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <span class="empty-icon">📭</span>
+                <p>暂无归档文件</p>
+                <small style="color: #666;">归档文件将在WAL轮转后生成</small>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+
+<style>
+.wal-dashboard { padding: 0; display: flex; flex-direction: column; height: 100%; }
+
+/* 关键修复：最外层滚动容器样式 */
+.wal-content-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    justify-content: flex-start;
+}
+
+/* 操作结果消息样式 */
+.operation-message {
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border-left: 3px solid;
+    border-radius: 3px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    flex-shrink: 0;
+
+    /* 添加自动隐藏动画（4秒开始淡出，0.5秒完成） */
+    animation: fadeIn 0.3s ease-in, fadeOut 0.5s ease-out 4s forwards;
+}
+
+.operation-message.success {
+    background: #003300;
+    border-color: #00ff00;
+    color: #00ff00;
+}
+
+.operation-message.error {
+    background: #330000;
+    border-color: #ff4444;
+    color: #ff4444;
+}
+
+.message-icon {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeOut {
+    to {
+        opacity: 0;
+        transform: translateY(-10px);
+        height: 0;
+        margin: 0;
+        padding: 0;
+        border-width: 0;
+    }
+}
+
+/* 当前WAL卡片（不移除，但不再控制滚动） */
+.wal-current-card {
+    background: #1a1a1a;
+    border: 2px solid #00ff00;
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+}
+.wal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #333;
+}
+.wal-title { font-size: 18px; font-weight: bold; }
+.wal-status-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+.wal-status-badge.status-ok { background: #003366; color: #00ff00; }
+.wal-status-badge.status-warning { background: #332200; color: #ffaa00; }
+.wal-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+.info-item label {
+    color: #888;
+    font-size: 11px;
+    display: block;
+    margin-bottom: 4px;
+}
+.wal-filename { color: #00ff00; }
+.wal-size { font-weight: bold; }
+.wal-size.size-warning { color: #ffaa00; }
+.wal-path { color: #666; }
+.wal-actions { text-align: right; }
+.wal-history h3 {
+    margin-bottom: 15px;
+    color: #00ff00;
+    font-size: 16px;
+}
+/* 归档清单移除高度限制，由父容器控制滚动 */
+.wal-file-list {
+    overflow-y: visible;
+    flex: 1;
+    min-height: 0;
+}
+
+/* 自定义滚动条（提升可视性） */
+.wal-file-list::-webkit-scrollbar {
+    width: 8px;
+}
+.wal-file-list::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+.wal-file-list::-webkit-scrollbar-thumb {
+    background: #00ff00;
+    border-radius: 4px;
+}
+
+.wal-file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    margin: 5px 0;
+    background: #1a1a1a;
+    border-left: 4px solid #00ff00;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+.wal-file-item:hover {
+    background: #252525;
+    border-left-color: #00ff88;
+}
+.file-info { display: flex; gap: 15px; align-items: center; }
+.file-name { font-weight: bold; color: #00ff00; }
+.file-size { color: #888; font-size: 11px; }
+.file-time { color: #666; font-size: 11px; }
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #888;
+}
+.empty-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+/* 自定义滚动条（移到父容器） */
+.wal-content-wrapper::-webkit-scrollbar {
+    width: 8px;
+}
+.wal-content-wrapper::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+.wal-content-wrapper::-webkit-scrollbar-thumb {
+    background: #00ff00;
+    border-radius: 4px;
+}
+/* 添加：操作提示自动隐藏动画 */
+.operation-message.auto-hide {
+    animation: fadeIn 0.3s ease-in, fadeOut 0.5s ease-out 4.5s forwards;
+}
+</style>
+<script>
+(function() {
+    // 立即执行的IIFE，确保脚本在HTMX加载后运行
+    console.log('[WAL] 脚本初始化...');
+
+    // 检测函数
+    function checkAndScheduleRefresh() {
+        const messageEl = document.getElementById('operation-message');
+        const messageTextEl = document.getElementById('message-text');
+
+        if (messageEl && messageTextEl) {
+            const messageText = messageTextEl.textContent.trim();
+            console.log('[WAL] 检测到操作消息:', messageText);
+
+            if (messageText.includes('WAL重放完成')) {
+                console.log('[WAL] ✅ 确认重放成功，5秒后将自动刷新归档历史');
+
+                // 添加样式标记（用于CSS动画）
+                messageEl.classList.add('auto-refresh');
+
+                // 5秒后刷新
+                setTimeout(() => {
+                    console.log('[WAL] 🔄 执行自动刷新...');
+                    refreshWalPanel();
+
+                    // 平滑滚动到顶部
+                    const wrapper = document.querySelector('.wal-content-wrapper');
+                    if (wrapper) {
+                        wrapper.scrollTop = 0;
+                    }
+                }, 5000);
+
+                return true; // 成功检测到
+            }
+        }
+        return false;
+    }
+
+    // DOMContentLoaded（标准时机）
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('[WAL] DOMContentLoaded 触发');
+        setTimeout(checkAndScheduleRefresh, 100); // 延迟100ms确保DOM稳定
+    });
+
+    // HTMX加载完成事件（关键修复）
+    document.addEventListener('htmx:afterSwap', function(event) {
+        if (event.target.id === 'wal-panel') {
+            console.log('[WAL] HTMX afterSwap 触发，面板内容已更新');
+            setTimeout(checkAndScheduleRefresh, 50); // 延迟50ms
+        }
+    });
+
+    // 直接执行（防止事件未触发）
+    setTimeout(checkAndScheduleRefresh, 300);
+
+    // 刷新函数（确保全局可用）
+    window.refreshWalPanel = function() {
+        const panel = document.getElementById('wal-panel');
+        if (panel && typeof htmx !== 'undefined') {
+            console.log('[WAL] 手动刷新归档历史...');
+            panel.style.opacity = '0.7';
+            htmx.ajax('GET', '/admin/system/wal_panel?t=' + Date.now(), {
+                target: '#wal-panel',
+                swap: 'innerHTML'
+            }).then(() => {
+                panel.style.opacity = '1';
+                console.log('[WAL] 归档历史刷新完成');
+            });
+        } else {
+            console.error('[WAL] 刷新失败: 面板或HTMX未找到');
+        }
+    };
+})();
+</script>

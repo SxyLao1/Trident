@@ -1,0 +1,47 @@
+/* ============================================================
+   Trident v1.8.0 主题变量系统 - Cyberpunk Terminal Theme
+   ============================================================ */
+
+:root {
+  /* 核心调色板 */
+  --color-bg: #0a0a0f;
+  --color-bg-secondary: #111116;
+  --color-bg-card: rgba(16, 20, 24, 0.85);
+  --color-bg-glass: rgba(20, 25, 30, 0.6);
+  --color-border: rgba(0, 255, 65, 0.25);
+  --color-border-hover: rgba(0, 255, 65, 0.6);
+  --color-border-glow: rgba(0, 255, 65, 0.15);
+
+  /* 文字 */
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #8899a6;
+  --color-text-muted: #556677;
+  --color-accent: #00ff41;
+  --color-accent-dim: #008f11;
+  --color-accent-glow: rgba(0, 255, 65, 0.4);
+
+  /* 状态色 */
+  --color-danger: #ff0040;
+  --color-danger-glow: rgba(255, 0, 64, 0.3);
+  --color-warning: #ffaa00;
+  --color-warning-glow: rgba(255, 170, 0, 0.3);
+  --color-safe: #00ff41;
+  --color-info: #00ccff;
+  --color-info-glow: rgba(0, 204, 255, 0.3);
+
+  /* 尺寸 */
+  --sidebar-width: 240px;
+  --header-height: 56px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* 字体 */
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  --font-sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  /* 动画 */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.5s ease;
+}

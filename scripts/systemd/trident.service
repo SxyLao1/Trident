@@ -1,0 +1,17 @@
+[Unit]
+Description=Trident WebShell Detector v1.7.8
+After=network.target
+
+[Service]
+Type=simple
+User=%USER%
+WorkingDirectory=%PROJECT_ROOT%
+Environment=PYTHONPATH=%PROJECT_ROOT%
+ExecStart=%VENV_PYTHON% %PROJECT_ROOT%/app.py
+Restart=always
+RestartSec=5
+StandardOutput=append:%PROJECT_ROOT%/logs/trident_service.log
+StandardError=append:%PROJECT_ROOT%/logs/trident_service.log
+
+[Install]
+WantedBy=multi-user.target

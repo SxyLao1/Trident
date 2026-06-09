@@ -1,0 +1,367 @@
+/* ============================================================
+   Trident v1.8.0 仪表盘专属样式
+   ============================================================ */
+
+/* ---- 指标卡片网格 ---- */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.metric-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-normal);
+}
+
+.metric-card::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 60px; height: 60px;
+  background: radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%);
+  opacity: 0.3;
+  transition: opacity var(--transition-normal);
+}
+
+.metric-card:hover::after { opacity: 0.6; }
+
+.metric-card:hover {
+  border-color: var(--color-border-hover);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 20px var(--color-border-glow);
+}
+
+.metric-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.metric-value.safe { color: var(--color-safe); text-shadow: 0 0 10px rgba(0,255,65,0.3); }
+.metric-value.warning { color: var(--color-warning); text-shadow: 0 0 10px rgba(255,170,0,0.3); }
+.metric-value.critical { color: var(--color-danger); text-shadow: 0 0 10px rgba(255,0,64,0.3); }
+
+/* 整个高危卡片闪烁 */
+.metric-card.critical {
+  animation: danger-pulse 2s ease-in-out infinite;
+  border-color: rgba(255, 0, 64, 0.5);
+  box-shadow: 0 0 15px rgba(255, 0, 64, 0.2);
+}
+
+.metric-card.critical .metric-value {
+  color: var(--color-danger);
+  text-shadow: 0 0 10px rgba(255,0,64,0.3);
+}
+
+@keyframes danger-pulse {
+  0%, 100% { box-shadow: 0 0 15px rgba(255, 0, 64, 0.2); border-color: rgba(255, 0, 64, 0.5); }
+  50% { box-shadow: 0 0 25px rgba(255, 0, 64, 0.4); border-color: rgba(255, 0, 64, 0.8); }
+}
+
+.metric-delta {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  margin-top: 6px;
+  color: var(--color-text-muted);
+}
+
+.metric-delta.up { color: var(--color-danger); }
+.metric-delta.down { color: var(--color-safe); }
+
+/* ---- 四象限面板 ---- */
+.quadrant-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 1200px) {
+  .quadrant-grid { grid-template-columns: 1fr; }
+}
+
+.quadrant-card {
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+.quadrant-card .card-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ---- 记录列表 ---- */
+.record-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.record-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--color-bg-glass);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.record-item:hover {
+  border-color: var(--color-border-hover);
+  background: rgba(0, 255, 65, 0.05);
+}
+
+.record-item.deleted {
+  opacity: 0.5;
+  border-style: dashed;
+}
+
+.record-info { flex: 1; min-width: 0; }
+
+.record-title {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.record-meta {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+  font-family: var(--font-mono);
+}
+
+.record-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+/* ---- 实时日志面板 ---- */
+.log-panel {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.log-panel-header {
+  padding: 10px 16px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.log-panel-header .status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 8px var(--color-accent);
+  animation: pulse-glow 2s infinite;
+}
+
+.log-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.log-entry {
+  padding: 2px 4px;
+  border-radius: 2px;
+  transition: background var(--transition-fast);
+}
+
+.log-entry:hover { background: rgba(0,255,65,0.03); }
+
+.log-entry .ts { color: var(--color-text-muted); margin-right: 8px; }
+.log-entry .lvl-info { color: var(--color-info); }
+.log-entry .lvl-warn { color: var(--color-warning); }
+.log-entry .lvl-error { color: var(--color-danger); }
+.log-entry .lvl-critical { color: var(--color-danger); background: rgba(255,0,64,0.08); }
+
+/* ---- 分页 ---- */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.page-btn {
+  min-width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.page-btn:hover {
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+  background: var(--color-bg-glass);
+}
+
+.page-btn.active {
+  background: var(--color-accent);
+  color: #000;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 10px var(--color-accent-glow);
+}
+
+/* ---- 空状态 ---- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.3;
+}
+
+/* ---- SSE状态指示器 ---- */
+.sse-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: var(--color-bg-glass);
+  border: 1px solid var(--color-border);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.sse-status .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  transition: all var(--transition-fast);
+}
+
+.sse-status.connected .dot {
+  background: var(--color-safe);
+  box-shadow: 0 0 8px var(--color-safe);
+}
+
+.sse-status.disconnected .dot {
+  background: var(--color-danger);
+  box-shadow: 0 0 8px var(--color-danger);
+  animation: pulse-glow 1s infinite;
+}
+
+.sse-status.connecting .dot {
+  background: var(--color-warning);
+  box-shadow: 0 0 8px var(--color-warning);
+  animation: pulse-glow 1s infinite;
+}
+
+
+/* Mobile dashboard adjustments */
+@media (max-width: 768px) {
+  .metrics-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .metric-value {
+    font-size: 22px;
+  }
+
+  .metric-card {
+    padding: 14px;
+  }
+
+  .quadrant-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .record-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .record-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .page-header {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+  }
+
+  .page-title {
+    font-size: 16px;
+  }
+}
+
+/* Records False Positive Styling */
+.record-false-positive {
+  opacity: 0.5;
+  background: rgba(255,255,255,0.02);
+}
+.record-false-positive .record-title {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+.record-false-positive .record-meta {
+  color: var(--color-text-muted);
+}
+.record-false-positive .badge-safe {
+  background: rgba(100,100,100,0.2);
+  color: #888;
+}
+

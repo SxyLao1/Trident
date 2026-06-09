@@ -1,0 +1,113 @@
+# Changelog
+
+All notable changes to this project are documented here.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [1.7.8] - 2026-05-27
+
+### Added
+- Modular installer architecture: `scripts/install.py` handles all install logic; `install.sh`/`install.bat` are minimal entry wrappers
+- Config-aware installation: reads existing `config.toml` and offers Keep / Overwrite / Review modes
+- Launcher scripts: `start.sh`/`start.bat` (foreground), `start_background.sh`/`start_background.bat` (background), `stop.sh`/`stop.bat`, `uninstall.sh`/`uninstall.bat`
+- Systemd service template for Linux auto-start
+- Full documentation overhaul with badges, quick start, and troubleshooting
+- CHANGELOG and RELEASE_NOTES in both English and Chinese
+
+### Changed
+- Zero hardcoding: install scripts no longer embed version numbers; version cascades from `config.toml` through `config/version.py`
+- `banner.txt` includes version and release date metadata
+- `ci.yml` workflow name synchronized with current version
+
+### Fixed
+- `install.bat` Python detection rewritten for Windows (fixed failure on Python 3.12)
+- `install.sh` Python detection now tries python3, python, py3, py in order
+- README-cn.md fully rewritten to match v1.7.8 feature set
+
+---
+
+## [1.7.7] - 2026-05-26
+
+### Added
+- Cyberpunk terminal frontend: dark theme with neon green accent, Canvas matrix-rain login animation
+- CSS/JS modularization: 6 CSS files + 4 JS files
+- WAL high-cohesion migration: all WAL functionality extracted to `core/wal_manager.py`
+- Full-site CSRF protection via Flask-WTF
+- Records single-view with inline false-positive toggle
+- SSE history embedding: backend directly embeds log buffer into dashboard template
+- Zero-hardcoding pagination: all pagination params read from `config.toml`
+- Batch operations for Records and YARA rules
+- Navigation simplified to Dashboard / System / Account
+
+### Changed
+- Frontend theme switched from light/admin-style to cyberpunk dark terminal
+- `suspicious_registry.py` no longer manages WAL
+- SSE log stream now embeds history server-side
+
+### Fixed
+- Container nesting bug when switching panels via innerHTML replacement
+- YARA upload modal not available in compact mode (moved to global scope)
+- CSRF token missing on HTMX POST requests
+- Version number inconsistency across config files
+
+### Security
+- Full-site CSRF protection
+- IP whitelist for admin access
+- Scrypt password hashing with strength validation
+
+---
+
+## [1.7.6] - 2026-01-20
+
+### Added
+- SSE refactoring: native EventSource replaces HTMX SSE extension
+- Account security management: password change with strength validation
+- System management quadrants: Registry / WAL / Session / Config
+- Ghost directory detection with lazy cache
+- `utils/sse_manager.py`: independent SSE push manager
+- `utils/password_utils.py`: password strength validation
+- `tools/ci_quick_validator.py`: CI quick validation
+
+### Changed
+- Metrics panel switched from SSE to HTMX polling (10s interval)
+- Registry update debounced to 500ms
+
+### Fixed
+- SSE connection leaks and duplicate refresh issues
+- Session authentication edge cases
+- Config hot-reload persistence failures
+
+---
+
+## [1.7.5] - 2025-12
+
+### Added
+- Ghost directory detection with LRU cache (capacity 100)
+- Wildcard log path support: `**/access.log` recursive matching
+- Session authentication with filesystem backend
+- Three-layer intelligent alerting with exponential backoff
+
+### Changed
+- Windows polling optimized with directory cache TTL
+
+---
+
+## [1.7.0] - 2025-11
+
+### Added
+- HTMX-based management frontend (zero Node.js dependency)
+- WAL transaction logs for write reliability
+- Three-layer alerting: exponential backoff + adaptive thresholds
+- Cross-platform monitoring: Linux Inotify / Windows polling auto-switch
+- YARA rule engine integration
+- Webhook / WeChat / Email multi-channel notifications
+
+---
+
+## [1.0.0] - 2025
+
+### Added
+- Initial release: file system monitoring + basic alerting

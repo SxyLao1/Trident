@@ -1,0 +1,112 @@
+<!-- Registry状态监控面板 -->
+<div class="registry-panel-container">
+    <!-- 操作结果消息（v1.7.6-Patch30新增） -->
+    {% if message %}
+    <div class="operation-message {{ message_type }}">
+        <span class="message-icon">{% if message_type == 'success' %}✓{% else %}✗{% endif %}</span>
+        {{ message }}
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="operation-message error">
+        <span class="message-icon">✗</span>
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <div class="metrics-grid">
+        <!-- 活跃威胁 -->
+        <div class="metric-card">
+            <div class="metric-label">活跃威胁</div>
+            {% set active_count = registry_data | selectattr('file_exists', 'equalto', true) | list | length %}
+            <div class="metric-value {% if active_count > 0 %}warning{% else %}safe{% endif %}">
+                {{ active_count }}
+            </div>
+            <small class="metric-subtitle">当前存在的可疑文件</small>
+        </div>
+
+        <!-- 历史总计 -->
+        <div class="metric-card">
+            <div class="metric-label">历史总计</div>
+            <div class="metric-value">{{ total_records }}</div>
+            <small class="metric-subtitle">包含已删除记录</small>
+        </div>
+
+        <!-- 保存模式 -->
+        <div class="metric-card">
+            <div class="metric-label">保存模式</div>
+            <div class="metric-value">
+                {% if '异步' in queue_status %}
+                    <span style="color: #00ff00;">异步</span>
+                {% else %}
+                    <span style="color: #888;">同步</span>
+                {% endif %}
+            </div>
+            <small class="metric-subtitle">{{ queue_status }}</small>
+        </div>
+
+        <!-- WAL状态 -->
+        <div class="metric-card">
+            <div class="metric-label">WAL状态</div>
+            <div class="metric-value">
+                {% if wal_status == 'warning' %}
+                    <span style="color: #ffaa00;">{{ "%.1f"|format(wal_size_mb) }}MB ⚠️</span>
+                {% else %}
+                    <span style="color: #00ff00;">{{ "%.1f"|format(wal_size_mb) }}MB</span>
+                {% endif %}
+            </div>
+            <small class="metric-subtitle">事务日志大小</small>
+        </div>
+
+        <!-- 最后保存时间 -->
+        <div class="metric-card">
+            <div class="metric-label">最后保存</div>
+            <div class="metric-value">{{ last_save }}</div>
+            <small class="metric-subtitle">Registry写入时间</small>
+        </div>
+    </div>
+</div>
+
+<style>
+.registry-panel-container {
+    padding-right: 8px;
+}
+
+/* 操作结果消息样式（v1.7.6-Patch30新增） */
+.operation-message {
+    padding: 10px 12px;
+    margin-bottom: 15px;
+    border-left: 4px solid;
+    border-radius: 3px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: fadeIn 0.3s ease-in;
+}
+
+.operation-message.success {
+    background: #003300;
+    border-color: #00ff00;
+    color: #00ff00;
+}
+
+.operation-message.error {
+    background: #330000;
+    border-color: #ff4444;
+    color: #ff4444;
+}
+
+.message-icon {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+
+</style>

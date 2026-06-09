@@ -1,0 +1,37 @@
+# ============================================================================
+# Trident Dependencies
+# ============================================================================
+# NOTE for Windows users:
+#   yara-python requires Visual C++ 14.0+ Build Tools on Windows.
+#   If pip install fails, download pre-built wheel from:
+#     https://pypi.org/project/yara-python/#files
+#   Or install Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+#   Then run: pip install yara_python-4.x.x-cp3xx-cp3xx-win_amd64.whl
+# ============================================================================
+
+# Core Dependencies
+yara-python>=4.3.0          # 放宽：避免Python 3.12编译失败，4.3+功能一样用
+watchdog>=3.0.0             # 文件系统监控
+requests>=2.32.3            # HTTP请求
+psutil>=5.9.8               # 内存监控
+flask>=2.3.3,<3.0.0         # 锁定2.x生态，兼容flask-admin/flask-wtf
+
+# Admin Backend
+flask-admin>=1.6.1          # 管理后台
+
+# TOML配置解析 (Python < 3.11需要tomli读取；3.11+内置tomllib)
+tomli>=2.0.1                # 读取TOML（保留无害）
+tomli-w>=1.0.0              # 写入TOML
+
+# CLI颜色化
+colorama>=0.4.6
+
+# 安全提醒库
+urllib3>=2.2.2
+
+# CSRF 保护
+flask-wtf>=1.2.1
+wtforms>=3.1.2
+
+# FLASK Session（修正版本号）
+Flask-Session>=0.5.0        # 原2.3.3是Flask版本号，此包正确版本是0.x

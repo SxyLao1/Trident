@@ -1,0 +1,102 @@
+name: Trident v1.7.8 CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+      timeout-minutes: 10
+
+    - name: Run syntax checks
+      run: |
+        python -m py_compile app.py
+        python -m py_compile web/factory.py
+        python -m py_compile core/monitor.py
+        python -m py_compile core/wal_manager.py
+        python -m py_compile utils/siem_formatter.py
+
+    - name: Run v1.7.8 API compatibility tests
+      run: |
+        python tests/compatibility/test_v178_api.py
+
+    - name: Run tools verification
+      run: |
+        python tests/tools/verify_all_tools.py
+
+    - name: Run quick validator
+      run: |
+        python tools/ci_quick_validator.py || true
+
+    - name: Verify YARA rules
+      run: |
+        python tools/verify_rules.py || true
+
+    - name: Verify log separation
+      run: |
+        python tools/verify_log_separation.py || true
+
+    - name: Verify wildcard support
+      run: |
+        python tools/verify_wildcard_support.py || true
+
+    - name: Test config loading
+      run: |
+        python -c "from config.loader import load_config; cfg = load_config(); print('Config loaded:', cfg['system']['version'])"
+
+    - name: Test version module
+      run: |
+        python -c "from config.version import get_version; print('Version:', get_version())"
+
+    - name: Test WAL manager
+      run: |
+        python -c "from core import wal_manager; print(wal_manager.get_wal_info())"
+
+    - name: Test SIEM formatter
+      run: |
+        python -c "from utils.siem_formatter import format_event; print(format_event({'file_path':'/tmp/test.php','rule_name':'test','severity':'high'}))"
+
+    - name: Build Docker image (Linux only)
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      run: |
+        docker build -t trident:test .
+      timeout-minutes: 15
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
+        path: |
+          test_results_*.json
+          logs/
+        retention-days: 7

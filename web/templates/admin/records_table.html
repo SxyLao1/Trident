@@ -1,0 +1,63 @@
+<div id="records-table-container" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;">
+  <div class="record-list">
+    {% for record in records %}
+    <div class="record-item {% if record.marked_false_positive %}record-false-positive{% endif %}" data-path="{{ record.file_path|urlencode }}">
+      <div class="record-info">
+        <div class="record-title">{{ record.display_name }}</div>
+        <div class="record-meta">
+          <span class="badge badge-{{ 'danger' if record.alerted else 'safe' }}">
+            {{ 'ALERT' if record.alerted else 'OK' }}{% if record.marked_false_positive %} <span style="opacity:0.7;font-size:10px;">(FP)</span>{% endif %}
+          </span>
+          <span style="color: var(--color-text-muted);">|</span>
+          <span>{{ record.detected_at }}</span>
+          <span style="color: var(--color-text-muted);">|</span>
+          <span>Comm: {{ record.communication_count }}</span>
+          <span style="color: var(--color-text-muted);">|</span>
+          <span>{{ record.features|join(', ') if record.features else 'None' }}</span>
+        </div>
+      </div>
+      <div class="record-actions" style="gap: 4px;">
+        <button class="btn btn-sm {% if record.marked_false_positive %}btn-ghost{% else %}btn-warning{% endif %}"
+                style="font-size: 11px; padding: 3px 8px;"
+                hx-post="/admin/mark_false_positive/{{ record.file_path|urlencode }}"
+                hx-confirm="{% if record.marked_false_positive %}Cancel false positive for {{ record.display_name }}?{% else %}Mark {{ record.display_name }} as false positive?{% endif %}"
+                hx-target="#records-table-container"
+                hx-swap="outerHTML">
+          {% if record.marked_false_positive %}Cancel FP{% else %}False Pos{% endif %}
+        </button>
+        <button class="btn btn-danger btn-sm"
+                style="font-size: 11px; padding: 3px 8px;"
+                hx-post="/admin/remove/{{ record.file_path|urlencode }}"
+                hx-confirm="Delete record {{ record.display_name }}?"
+                hx-target="#records-table-container"
+                hx-swap="outerHTML">
+          Delete
+        </button>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">⚡</div>
+      <p>No detection records found</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if total_pages > 1 %}
+  <div class="pagination-bar">
+    <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %}
+            hx-get="/admin/records?page={{ page - 1 }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}"
+            hx-target="#records-table-container"
+            hx-swap="outerHTML">← Prev</button>
+    <span class="page-info">Page {{ page }} / {{ total_pages }} ({{ total }} total)</span>
+    <div class="page-jump">
+      <input type="number" class="form-input" style="width: 60px; text-align: center;" min="1" max="{{ total_pages }}" value="{{ page }}"
+             onkeydown="if(event.key==='Enter'){var p=this.value,url='/admin/records?page='+p+'{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}';htmx.ajax('GET',url,{target:'#records-table-container',swap:'outerHTML'})}">
+    </div>
+    <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %}
+            hx-get="/admin/records?page={{ page + 1 }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}"
+            hx-target="#records-table-container"
+            hx-swap="outerHTML">Next →</button>
+  </div>
+  {% endif %}
+</div>

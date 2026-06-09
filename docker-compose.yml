@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  trident:
+    build: .
+    container_name: trident
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - /var/www/html:/app/monitor:ro  # Mount website to monitor
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

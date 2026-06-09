@@ -1,0 +1,244 @@
+<!-- 配置监控面板 -->
+<div class="config-dashboard">
+  {% if message %}
+  <div class="operation-message {{ message_type }}">
+    <span class="message-icon">{% if message_type == 'success' %}✓{% else %}✗{% endif %}</span>
+    {{ message }}
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div class="operation-message error">
+    <span class="message-icon">✗</span>
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <!-- 配置签名卡片 -->
+  <div class="config-signature-card">
+    <div class="config-header">
+      <span class="config-title">⚙️ 配置签名</span>
+      <code class="signature">{{ config_signature }}</code>
+    </div>
+    <small class="config-path">{{ config_path }}</small>
+  </div>
+
+  <!-- YARA规则统计 -->
+  <div class="config-section">
+    <h3>🛡️ YARA规则统计</h3>
+    {% if yara_enabled %}
+    <div class="yara-stats-grid">
+      {% for lang, count in rule_stats.items() %}
+      <div class="stat-item">
+        <span class="stat-label">{{ lang.upper() }}</span>
+        <span class="stat-value">{{ count }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="yara-disabled">
+      <span class="warning-icon">⚠️</span>
+      YARA引擎未启用或未加载规则
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- 热加载历史 -->
+  <div class="config-section">
+    <h3>📝 热加载历史</h3>
+    <div class="config-history-list">
+      {% if history %}
+        {% for line in history %}
+        <div class="history-item">
+          <div class="history-content">{{ line }}</div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">
+          <span class="empty-icon">📋</span>
+          <p>暂无热加载记录</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- 分页控件（必须在 endfor 之后） -->
+    {% if total_pages > 1 %}
+    <div class="pagination-bar" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
+      <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %}
+              hx-get="/admin/system/config_panel?page={{ page - 1 }}"
+              hx-target="#system-config-panel"
+              hx-swap="innerHTML">← Prev</button>
+      <span class="page-info">Page {{ page }} / {{ total_pages }} ({{ total }} total)</span>
+      <div class="page-jump">
+        <input type="number" class="form-input" style="width: 60px; text-align: center;" min="1" max="{{ total_pages }}" value="{{ page }}"
+               onkeydown="if(event.key==='Enter'){var p=this.value;htmx.ajax('GET','/admin/system/config_panel?page='+p,{target:'#system-config-panel',swap:'innerHTML'})}">
+      </div>
+      <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %}
+              hx-get="/admin/system/config_panel?page={{ page + 1 }}"
+              hx-target="#system-config-panel"
+              hx-swap="innerHTML">Next →</button>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- 快速操作 -->
+  <div class="config-actions">
+    <button class="btn btn-success"
+            hx-post="/admin/system/config/reload"
+            hx-confirm="确定立即重载配置？"
+            onclick="this.innerHTML='⏳ 重载中...'; this.disabled=true;">
+      🔄 手动重载
+    </button>
+  </div>
+</div>
+
+<style>
+.config-dashboard {
+  max-height: 450px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.operation-message {
+  padding: 10px 12px;
+  margin-bottom: 15px;
+  border-left: 4px solid;
+  border-radius: 3px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: fadeIn 0.3s ease-in;
+  flex-shrink: 0;
+}
+.operation-message.success {
+  background: #003300;
+  border-color: #00ff00;
+  color: #00ff00;
+}
+.operation-message.error {
+  background: #330000;
+  border-color: #ff4444;
+  color: #ff4444;
+}
+.message-icon {
+  font-weight: bold;
+  font-size: 14px;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.config-signature-card,
+.config-section h3 {
+  flex-shrink: 0;
+}
+
+.config-history-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 8px;
+  padding-right: 8px;
+}
+
+.config-history-list::-webkit-scrollbar {
+  width: 8px;
+}
+.config-history-list::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+.config-history-list::-webkit-scrollbar-thumb {
+  background: #00ff00;
+  border-radius: 4px;
+}
+
+.config-signature-card {
+  background: #1a1a1a;
+  border: 2px solid #00ff00;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+.config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.config-title {
+  font-size: 16px;
+  font-weight: bold;
+}
+.signature {
+  background: #003366;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+.config-path {
+  color: #666;
+  font-size: 11px;
+}
+.config-section {
+  margin-bottom: 25px;
+}
+.yara-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 10px;
+}
+.stat-item {
+  text-align: center;
+  padding: 10px;
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+.stat-label {
+  display: block;
+  color: #888;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.stat-value {
+  font-size: 18px;
+  font-weight: bold;
+  color: #00ff00;
+}
+.yara-disabled {
+  text-align: center;
+  padding: 20px;
+  color: #ffaa00;
+}
+.warning-icon {
+  font-size: 24px;
+  display: block;
+  margin-bottom: 8px;
+}
+.history-item {
+  background: #1a1a1a;
+  padding: 10px 12px;
+  margin: 5px 0;
+  border-left: 4px solid #003366;
+  border-radius: 3px;
+}
+.history-content {
+  font-size: 11px;
+  color: #888;
+}
+.empty-state {
+  text-align: center;
+  padding: 20px;
+  color: #888;
+}
+.empty-icon {
+  font-size: 24px;
+  display: block;
+  margin-bottom: 8px;
+}
+.config-actions {
+  text-align: center;
+  padding: 15px;
+}
+</style>

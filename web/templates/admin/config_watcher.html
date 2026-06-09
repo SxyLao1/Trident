@@ -1,0 +1,28 @@
+<div class="card" style="margin-bottom: 20px;">
+  <div class="card-header">
+    <span><span class="card-header-icon">⚙</span> Config Load History</span>
+  </div>
+  <div class="card-body">
+    <div id="config-history"
+         hx-get="/admin/config/history"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+      <div class="empty-state"><div class="spinner"></div><p>Loading history...</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span><span class="card-header-icon">⚙</span> Current Config Signature</span>
+  </div>
+  <div class="card-body">
+    <div id="config-signature"
+         hx-get="/admin/config/signature"
+         hx-trigger="load"
+         hx-swap="innerHTML"
+         style="font-family: var(--font-mono); font-size: 13px; word-break: break-all;">
+      <div class="skeleton" style="height: 20px; width: 300px;"></div>
+    </div>
+  </div>
+</div>

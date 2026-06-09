@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Trident :: Secure Login</title>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/vars.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+  <script src="{{ url_for('static', filename='js/cyber-effects.js') }}" defer></script>
+  <meta name="trident-version" content="{{ trident_version }}" hidden>
+</head>
+<body class="login-page">
+  <div class="login-box animate-fade-in-up">
+    <div class="login-header">
+      <div class="login-brand">TRIDENT</div>
+      <div class="login-subtitle">WebShell Detection System</div>
+    </div>
+
+    {% if error %}
+    <div class="login-error">
+      <span>⚠</span>
+      <span>{{ error }}</span>
+    </div>
+    {% endif %}
+
+    <form class="login-form" method="POST" action="{{ url_for('admin.login') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input type="text" name="username" class="form-input" placeholder="root" required autofocus>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" name="password" class="form-input" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="login-btn">AUTHENTICATE</button>
+    </form>
+
+    <div class="login-footer">
+      Trident Security Platform // MIT License // Cross-Platform
+    </div>
+  </div>
+</body>
+</html>

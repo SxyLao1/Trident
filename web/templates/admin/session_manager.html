@@ -1,0 +1,93 @@
+<div class="session-page">
+  <div class="session-page-header">
+    <div class="session-page-stats">
+      <div class="stat-pill">
+        <span class="stat-pill-label">Total</span>
+        <span class="stat-pill-value" id="session-total-count">-</span>
+      </div>
+      <div class="stat-pill active">
+        <span class="stat-pill-label">Active 30d</span>
+        <span class="stat-pill-value" id="session-active-count">-</span>
+      </div>
+    </div>
+    <div class="session-page-actions">
+      <button class="btn btn-danger btn-sm"
+              hx-post="/admin/system/session/cleanup"
+              hx-confirm="Cleanup expired sessions?"
+              hx-target="#session-list-full"
+              hx-swap="innerHTML">
+        Cleanup
+      </button>
+      <button class="btn btn-ghost btn-sm"
+              hx-get="/admin/session/list"
+              hx-target="#session-list-full"
+              hx-swap="innerHTML">
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <div id="session-list-full"
+       hx-get="/admin/session/list"
+       hx-trigger="load"
+       hx-target="#session-list-full"
+       hx-swap="innerHTML">
+    <div class="empty-state">
+      <div class="spinner"></div>
+      <p>Loading sessions...</p>
+    </div>
+  </div>
+</div>
+
+<style>
+.session-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 16px;
+}
+.session-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.session-page-stats {
+  display: flex;
+  gap: 12px;
+}
+.stat-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 20px;
+  padding: 6px 14px;
+}
+.stat-pill.active {
+  border-color: #00ff41;
+}
+.stat-pill-label {
+  font-size: 11px;
+  color: #888;
+}
+.stat-pill-value {
+  font-size: 16px;
+  font-weight: bold;
+  color: #00ff41;
+  font-family: var(--font-mono);
+}
+.session-page-actions {
+  display: flex;
+  gap: 8px;
+}
+#session-list-full {
+  flex: 1;
+  overflow-y: auto;
+  background: #0d0d0d;
+  border: 1px solid #222;
+  border-radius: 8px;
+  padding: 12px;
+}
+</style>
