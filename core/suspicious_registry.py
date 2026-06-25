@@ -607,6 +607,25 @@ def mark_alerted(file_path: Path):
     except Exception as e:
         log_with_symbol("error_mark_alerted", "error", f"异常: {e}")
 
+def mark_quarantined(file_path: str, quarantine_id: str):
+    """v1.7.9: 标记文件已被隔离 — 更新 Registry 条目并设 file_exists=False"""
+    _ensure_initialized()
+    try:
+        registry = _load_registry()
+        abs_path = path_to_key(file_path)
+        for item in registry:
+            if item["file_path"] == abs_path:
+                item["file_exists"] = False
+                item["quarantine_id"] = quarantine_id
+                item["quarantined_at"] = datetime.now().isoformat()
+                _save_registry(registry)
+                log_with_symbol("quarantine_add", "info",
+                                f"Registry 已标记隔离: {Path(file_path).name} -> {quarantine_id}")
+                break
+    except Exception as e:
+        log_with_symbol("error_registry_save", "error", f"标记隔离失败: {e}")
+
+
 def increment_access(file_path: Path, ip: str):
     """增加访问计数 - v1.7.7-Patch11: 使用防抖SSE推送"""
     _ensure_initialized()

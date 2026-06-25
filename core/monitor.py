@@ -481,17 +481,23 @@ class FileMonitorHandler(FileSystemEventHandler):
                 log_with_symbol("scan_hit", "critical",
                                 f"{event_path.name} | 引擎: {scan_result.engine}", self.logger)
 
-                # v1.7.9: 自动隔离
+                # v1.7.9: 自动隔离 + Registry 联动
                 try:
+                    from core.suspicious_registry import mark_quarantined
                     rule_name = scan_result.features[0] if scan_result.features else "unknown"
-                    quarantine_file(
+                    result = quarantine_file(
                         file_path=str(event_path),
                         rule_name=rule_name,
                         features=scan_result.features,
                         original_path=str(event_path)
                     )
-                    log_with_symbol("quarantine_add", "info",
-                                    f"[QUARANTINE] 已隔离: {event_path.name}", self.logger)
+                    if result is not None:
+                        # 隔离成功 → 更新 Registry 条目
+                        mark_quarantined(str(event_path), result["quarantine_id"])
+                        log_with_symbol("quarantine_add", "info",
+                                        f"[QUARANTINE] 已隔离: {event_path.name} -> {result['quarantine_id']}", self.logger)
+                    else:
+                        self.logger.warning(f"[QUARANTINE] 隔离跳过: {event_path.name} (文件不存在)")
                 except Exception as qe:
                     self.logger.warning(f"[QUARANTINE] 隔离失败: {event_path.name} | {qe}")
 
