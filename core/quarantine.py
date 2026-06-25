@@ -14,6 +14,7 @@ v1.7.9 新增：WebShell 自动隔离模块
 """
 import json
 import os
+import re
 import shutil
 import threading
 import uuid
@@ -52,22 +53,78 @@ def _get_db_path() -> Path:
 
 
 def _load_db() -> List[Dict[str, Any]]:
-    """加载隔离记录数据库"""
+    """加载隔离记录数据库。如果文件丢失但磁盘有隔离文件，自动重建。"""
     db_path = _get_db_path()
-    if not db_path.exists():
-        return []
-    try:
-        with open(db_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return []
+    if db_path.exists():
+        try:
+            with open(db_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass  # 文件损坏，fallthrough 到重建逻辑
+
+    # 数据库不存在或损坏，尝试从磁盘文件恢复
+    qdir = _get_quarantine_dir()
+    recovered = []
+    for date_dir in sorted(qdir.glob("*")):
+        if not date_dir.is_dir():
+            continue
+        for f in sorted(date_dir.iterdir(), key=lambda x: x.name, reverse=True):
+            match = re.match(r'(Q-\d{14}-[A-F0-9]{8})_(.+)', f.name)
+            if not match:
+                continue
+            qid = match.group(1)
+            original_name = match.group(2)
+            ts_str = qid[2:16]
+            try:
+                from datetime import datetime
+                ts = datetime.strptime(ts_str, "%Y%m%d%H%M%S")
+            except:
+                ts = datetime.fromtimestamp(f.stat().st_mtime)
+            recovered.append({
+                "quarantine_id": qid,
+                "original_path": f"(recovered)/{original_name}",
+                "quarantine_path": str(f),
+                "quarantine_time": ts.isoformat(),
+                "rule_name": "(auto-recovered from disk)",
+                "features": ["(recovered)"],
+                "file_size": f.stat().st_size,
+                "status": "quarantined",
+            })
+    if recovered:
+        recovered.sort(key=lambda r: r["quarantine_time"], reverse=True)
+        _save_db(recovered)
+        log_with_symbol("quarantine_recover", "INFO",
+                        f"[QUARANTINE] 自动从磁盘恢复 {len(recovered)} 条隔离记录")
+    return recovered
 
 
 def _save_db(records: List[Dict[str, Any]]) -> None:
-    """保存隔离记录数据库"""
+    """保存隔离记录数据库（v1.7.9: 原子写入 + 备份，防断电/并发损坏）"""
     db_path = _get_db_path()
-    with open(db_path, 'w', encoding='utf-8') as f:
+    tmp_path = db_path.with_suffix('.tmp')
+    bak_path = db_path.with_suffix('.bak')
+
+    # 1. 写入临时文件
+    with open(tmp_path, 'w', encoding='utf-8') as f:
         json.dump(records, f, ensure_ascii=False, indent=2)
+    f.flush()
+    os.fsync(f.fileno())
+
+    # 2. 保留旧文件作为备份
+    if db_path.exists():
+        try:
+            db_path.replace(bak_path)
+        except OSError:
+            pass  # Windows 上可能被占用，跳过备份
+
+    # 3. 原子替换
+    try:
+        tmp_path.replace(db_path)
+    except OSError:
+        # Windows fallback: 先删目标再rename
+        if db_path.exists():
+            db_path.unlink()
+        tmp_path.replace(db_path)
 
 
 # ============================================================================
@@ -98,7 +155,8 @@ def quarantine_file(
     with _quarantine_lock:
         src = normalize_path(file_path)
         if not src.exists():
-            logger.warning(f"[QUARANTINE] 隔离源文件不存在，跳过: {file_path}")
+            log_with_symbol("quarantine_skip", "WARNING",
+                            f"[QUARANTINE] 隔离源文件不存在，跳过: {file_path}")
             return None
 
         quarantine_dir = _get_quarantine_dir()
@@ -116,10 +174,12 @@ def quarantine_file(
         try:
             shutil.move(str(src), str(quarantine_file))
         except FileNotFoundError:
-            logger.warning(f"[QUARANTINE] 源文件在移动前已被删除: {src}")
+            log_with_symbol("quarantine_skip", "WARNING",
+                            f"[QUARANTINE] 源文件在移动前已被删除: {src}")
             return None
         except PermissionError:
-            logger.warning(f"[QUARANTINE] 权限不足，无法移动: {src}")
+            log_with_symbol("quarantine_skip", "WARNING",
+                            f"[QUARANTINE] 权限不足，无法移动: {src}")
             return None
 
         # 记录元数据

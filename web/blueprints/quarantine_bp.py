@@ -10,26 +10,15 @@ from datetime import datetime
 v1.7.9 新增：隔离管理后台蓝图
 """
 from flask import Blueprint, render_template, request, jsonify, current_app
-from functools import wraps
 
 from core.quarantine import (
     get_quarantine_list, get_quarantine_detail, get_quarantine_stats,
     restore_file, delete_quarantine
 )
 from config.registry import ConfigRegistry
+from web.auth import require_auth
 
 quarantine_bp = Blueprint('quarantine', __name__, url_prefix='/admin')
-
-
-def require_auth(f):
-    """鉴权装饰器"""
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        from flask import session, redirect, url_for
-        if not session.get('authenticated'):
-            return redirect(url_for('admin.login'))
-        return f(*args, **kwargs)
-    return decorated
 
 
 @quarantine_bp.route('/quarantine', methods=['GET'])
