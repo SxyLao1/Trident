@@ -296,6 +296,10 @@ def login():
     expected_username, password_hash, allowed_ips = get_admin_credentials()
     client_ip = request.remote_addr
 
+    # v1.7.9: 过滤空用户名的无效POST（浏览器/扩展自动请求等噪音）
+    if not username:
+        return render_template('admin/login.html', error="请输入用户名"), 400
+
     # V-006: 速率限制检查
     allowed, rate_msg = _check_login_rate(client_ip)
     if not allowed:
