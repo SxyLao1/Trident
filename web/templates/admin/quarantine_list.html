@@ -1,0 +1,84 @@
+<div class="quarantine-list" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;">
+  <div class="quarantine-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px;">
+    <div class="stat-card" style="background: #0a0a0a; border: 1px solid #00ff41; border-radius: 4px; padding: 16px; text-align: center;">
+      <div style="color: #00ff41; font-size: 24px; font-weight: bold;">{{ stats.total }}</div>
+      <div style="color: #888; font-size: 12px;">Total</div>
+    </div>
+    <div class="stat-card" style="background: #0a0a0a; border: 1px solid #ff6b35; border-radius: 4px; padding: 16px; text-align: center;">
+      <div style="color: #ff6b35; font-size: 24px; font-weight: bold;">{{ stats.quarantined }}</div>
+      <div style="color: #888; font-size: 12px;">Quarantined</div>
+    </div>
+    <div class="stat-card" style="background: #0a0a0a; border: 1px solid #00ff41; border-radius: 4px; padding: 16px; text-align: center;">
+      <div style="color: #00ff41; font-size: 24px; font-weight: bold;">{{ stats.restored }}</div>
+      <div style="color: #888; font-size: 12px;">Restored</div>
+    </div>
+    <div class="stat-card" style="background: #0a0a0a; border: 1px solid #888; border-radius: 4px; padding: 16px; text-align: center;">
+      <div style="color: #888; font-size: 24px; font-weight: bold;">{{ stats.deleted }}</div>
+      <div style="color: #888; font-size: 12px;">Deleted</div>
+    </div>
+  </div>
+
+  <div class="status-filter" style="margin-bottom: 16px;">
+    <a href="/admin/quarantine?status=all{% if compact %}&compact=1{% endif %}" class="btn btn-sm {% if current_status == 'all' %}btn-primary{% else %}btn-ghost{% endif %}">All</a>
+    <a href="/admin/quarantine?status=quarantined{% if compact %}&compact=1{% endif %}" class="btn btn-sm {% if current_status == 'quarantined' %}btn-primary{% else %}btn-ghost{% endif %}">Quarantined</a>
+    <a href="/admin/quarantine?status=restored{% if compact %}&compact=1{% endif %}" class="btn btn-sm {% if current_status == 'restored' %}btn-primary{% else %}btn-ghost{% endif %}">Restored</a>
+    <a href="/admin/quarantine?status=deleted{% if compact %}&compact=1{% endif %}" class="btn btn-sm {% if current_status == 'deleted' %}btn-primary{% else %}btn-ghost{% endif %}">Deleted</a>
+  </div>
+
+  <div class="record-list">
+    {% for record in records %}
+    <div class="record-item" style="border-left: 3px solid {% if record.status == 'quarantined' %}#ff6b35{% elif record.status == 'restored' %}#00ff41{% else %}#888{% endif %};">
+      <div class="record-info">
+        <div class="record-title">{{ record.quarantine_id }}</div>
+        <div class="record-meta">
+          <span class="badge badge-{{ 'danger' if record.status == 'quarantined' else 'safe' if record.status == 'restored' else 'gray' }}">
+            {{ record.status.upper() }}
+          </span>
+          <span>{{ record.quarantine_time[:16] }}</span>
+          <span>{{ record.original_path.split("\\")[-1].split("/")[-1] }}</span>
+          <span>{{ (record.file_size / 1024)|round(2) }} KB</span>
+        </div>
+      </div>
+      <div class="record-actions" style="gap: 4px;">
+        <button class="btn btn-sm btn-info"
+                hx-get="/admin/quarantine/detail?qid={{ record.quarantine_id }}"
+                hx-target="#quarantine-detail-modal"
+                hx-swap="innerHTML"
+                onclick="document.getElementById('quarantine-detail-modal').style.display='block'">
+          🔍 Detail
+        </button>
+        {% if record.status == 'quarantined' %}
+        <button class="btn btn-sm btn-success"
+                hx-post="/admin/quarantine/restore?qid={{ record.quarantine_id }}"
+                hx-confirm="Restore {{ record.quarantine_id }} to original location?"
+                hx-target="#quarantine-list-container"
+                hx-swap="outerHTML">
+          ↩️ Restore
+        </button>
+        <button class="btn btn-sm btn-danger"
+                hx-post="/admin/quarantine/delete?qid={{ record.quarantine_id }}"
+                hx-confirm="PERMANENTLY delete {{ record.quarantine_id }}? This cannot be undone."
+                hx-target="#quarantine-list-container"
+                hx-swap="outerHTML">
+          🗑️ Delete
+        </button>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <p style="color: #888; text-align: center; padding: 40px;">No quarantine records found</p>
+    {% endfor %}
+  </div>
+
+  {% if total_pages > 1 %}
+  <div class="pagination" style="margin-top: 16px;">
+    {% if page > 1 %}
+    <button class="btn btn-sm" hx-get="/admin/quarantine?status={{ current_status }}&page={{ page - 1 }}{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container">Prev</button>
+    {% endif %}
+    <span style="color: #888;">Page {{ page }} / {{ total_pages }} ({{ total }} total)</span>
+    {% if page < total_pages %}
+    <button class="btn btn-sm" hx-get="/admin/quarantine?status={{ current_status }}&page={{ page + 1 }}{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container">Next</button>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>

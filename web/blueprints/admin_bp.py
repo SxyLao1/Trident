@@ -155,6 +155,56 @@ def dashboard_index():
 @admin_bp.route('/dashboard_content')
 @require_auth
 def dashboard_content():
+    """v1.7.9: 安全报告 Dashboard"""
+    try:
+        from core.suspicious_registry import get_all
+        from core.quarantine import get_quarantine_stats
+
+        all_records = get_all(include_deleted=True)
+        quarantine_stats = get_quarantine_stats()
+
+        total = len(all_records)
+        quarantined = quarantine_stats.get("quarantined", 0)
+        false_positives = sum(1 for r in all_records if r.get("marked_false_positive", False))
+        protection_rate = round((quarantined / total * 100), 1) if total > 0 else 0.0
+
+        # 最近5条检测事件
+        recent = []
+        for r in all_records[:5]:
+            try:
+                file_name = r.get("file_path", "").split('\\')[-1].split("/")[-1]
+            except:
+                file_name = "unknown"
+            recent.append({
+                "time": r.get("detected_at", "N/A")[:16],
+                "file": file_name,
+                "rule": r.get("features", ["Unknown"])[0] if r.get("features") else "Unknown",
+                "quarantined": False,
+                "false_positive": r.get("marked_false_positive", False)
+            })
+
+        stats = {
+            "total_detections": total,
+            "quarantined": quarantined,
+            "false_positives": false_positives,
+            "protection_rate": protection_rate
+        }
+
+        return render_template(
+            'admin/dashboard_content.html',
+            stats=stats,
+            recent_events=recent,
+            compact=request.args.get('compact') == '1'
+        )
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] dashboard_content失败: {e}", exc_info=True)
+        return f'<div style="color: #ff4444;">内容加载失败: {str(e)}</div>', 500
+
+
+@admin_bp.route('/monitor_content')
+@require_auth
+def monitor_content():
+    """v1.7.9: 监测模块（原 Dashboard 内容）"""
     try:
         auth_header = session.get('sse_token')
         if not auth_header:
@@ -174,7 +224,6 @@ def dashboard_content():
             'port_status': '已监听' if website_reachable else '未监听'
         } if website else None
 
-        # v1.8.4: 直接嵌入 SSE 历史日志到 dashboard_content，避免前端 fetch 不可靠
         log_history_html = ""
         try:
             buffer_file = normalize_path("data/sse_log_buffer.json")
@@ -204,18 +253,19 @@ def dashboard_content():
                         html_parts.append(f'<div class="log-line {log_class}">{safe_line}</div>')
                     log_history_html = ''.join(html_parts)
         except Exception as e:
-            current_app.logger.warning(f"[DASHBOARD_CONTENT] 历史日志加载失败: {e}")
+            current_app.logger.warning(f"[MONITOR_CONTENT] 历史日志加载失败: {e}")
 
         return render_template(
-            'admin/dashboard_content.html',
+            'admin/monitor_content.html',
             auth_header=auth_header,
             username=session.get('username'),
             client_ip=request.remote_addr,
             website_info=website_info,
-            log_history=log_history_html
+            log_history=log_history_html,
+            compact=request.args.get('compact') == '1'
         )
     except Exception as e:
-        current_app.logger.error(f"[ADMIN] dashboard_content失败: {e}", exc_info=True)
+        current_app.logger.error(f"[ADMIN] monitor_content失败: {e}", exc_info=True)
         return f'<div style="color: #ff4444;">内容加载失败: {str(e)}</div>', 500
 
 
@@ -350,6 +400,70 @@ def get_records():
     except Exception as e:
         current_app.logger.error(f"[ADMIN][RECORDS] 致命错误: {e}", exc_info=True)
         return render_template('admin/error.html', error=str(e)), 500
+
+
+@admin_bp.route('/records/detail', methods=['GET'])
+@require_auth
+def get_record_detail():
+    """v1.7.9: 获取单个检测记录的完整详情"""
+    try:
+        file_path = request.args.get('file_path', '')
+        if not file_path:
+            return jsonify({"error": "缺少 file_path 参数"}), 400
+
+        # 从 registry 查找记录
+        records = get_all(include_deleted=True)
+        record = None
+        for r in records:
+            if r.get("file_path") == file_path:
+                record = r
+                break
+
+        if not record:
+            return jsonify({"error": "记录不存在"}), 404
+
+        # 组装详情数据
+        try:
+            file_path_obj = normalize_path(file_path)
+            display_name = file_path_obj.name
+            file_size = file_path_obj.stat().st_size if file_path_obj.exists() else 0
+        except:
+            display_name = file_path.split("\\")[-1].split("/")[-1]
+            file_size = 0
+
+        # 检查是否已被隔离
+        from core.quarantine import get_quarantine_list
+        quarantine_records = get_quarantine_list(status="quarantined")
+        quarantine_info = None
+        for q in quarantine_records:
+            if q.get("original_path") == file_path:
+                quarantine_info = q
+                break
+
+        detail = {
+            "file_path": file_path,
+            "display_name": display_name,
+            "detected_at": record.get("detected_at", "N/A"),
+            "features": record.get("features", []),
+            "rule_name": record.get("features", ["未知"])[0] if record.get("features") else "未知",
+            "file_exists": record.get("file_exists", False),
+            "file_size": file_size,
+            "communication_count": record.get("communication_count", 0),
+            "first_seen_ip": record.get("first_seen_ip", "N/A"),
+            "alerted": record.get("alerted", False),
+            "marked_false_positive": record.get("marked_false_positive", False),
+            "deleted_at": record.get("deleted_at", "N/A"),
+            "quarantine_info": quarantine_info
+        }
+
+        if request.headers.get('HX-Request'):
+            return render_template('admin/record_detail.html', record=detail)
+        else:
+            return jsonify(detail)
+
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN][RECORD_DETAIL] 错误: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 
 @admin_bp.route('/search')

@@ -26,3 +26,7 @@ def register_blueprints(app: 'Flask'):
     # 注册YARA Blueprint
     from web.blueprints.yara_bp import yara_bp
     app.register_blueprint(yara_bp)
+
+    # v1.7.9: 注册Quarantine Blueprint
+    from web.blueprints.quarantine_bp import quarantine_bp
+    app.register_blueprint(quarantine_bp)
