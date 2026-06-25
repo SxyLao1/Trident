@@ -29,7 +29,11 @@
 - `core/suspicious_registry.py` — `PermissionError` 降级内存模式，避免崩溃
 
 ### 安全
-- 渗透测试发现 6 个漏洞（2 CRITICAL + 1 HIGH + 1 MEDIUM + 2 LOW），待修复
+- ~~V-001/V-002~~ — YARA 规则未授权读写（CRITICAL）— 已修复：所有 `/admin/yara/*` 路由加 `@require_auth`，抽取 `web/auth.py` 公共认证模块
+- ~~V-003~~ — YARA 搜索未授权访问（HIGH）— 已修复：`/admin/yara/search` 加 `@require_auth`
+- ~~V-004~~ — 路径穿越导致 500（MEDIUM）— 已修复：`_validate_rule_path()` 统一路径验证，拒绝 `..` 和 null byte 注入
+- ~~V-005~~ — 服务器信息泄露（LOW）— 已修复：`factory.py` 移除 `Server` 响应头
+- ~~V-006~~ — 登录无速率限制（LOW）— 已修复：内存级速率限制，每 IP 每分钟最多 5 次
 
 ---
 
