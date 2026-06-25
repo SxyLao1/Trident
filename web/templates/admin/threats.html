@@ -29,21 +29,23 @@
     </div>
   </div>
 
-  <!-- Quarantine (lazy loaded on first tab switch) -->
+  <!-- Quarantine (auto-loaded on Threats page load) -->
   <div id="threats-tab-quarantine" class="threats-tab-content" style="flex: 1; overflow: hidden; display: none;">
     <div id="threats-quarantine-container" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;"
          hx-get="/admin/quarantine?status=quarantined"
+         hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Click tab to load...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>Loading quarantine...</p></div>
     </div>
   </div>
 
-  <!-- Audit Log (lazy loaded on first tab switch) -->
+  <!-- Audit Log (auto-loaded on Threats page load) -->
   <div id="threats-tab-audit" class="threats-tab-content" style="flex: 1; overflow: hidden; display: none;">
     <div id="threats-audit-container" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;"
          hx-get="/admin/records?audit=true&compact=1"
+         hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Click tab to load...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>Loading audit log...</p></div>
     </div>
   </div>
 </div>

@@ -247,6 +247,25 @@ function loadContent(path, title) {
 
 var _threatsTabsLoaded = {active: true, quarantine: false, audit: false};
 
+// Auto-load hidden tabs when Threats page loads
+document.addEventListener('htmx:afterSettle', function(evt) {
+  if (evt.target && evt.target.id === 'main-content') {
+    // Check if Threats page just loaded
+    if (document.querySelector('.threats-tab')) {
+      setTimeout(function() {
+        ['quarantine', 'audit'].forEach(function(tab) {
+          if (!_threatsTabsLoaded[tab]) {
+            _threatsTabsLoaded[tab] = true;
+            var urls = { quarantine: '/admin/quarantine?status=quarantined', audit: '/admin/records?audit=true&compact=1' };
+            var targets = { quarantine: '#threats-quarantine-container', audit: '#threats-audit-container' };
+            if (urls[tab] && window.htmx) htmx.ajax('GET', urls[tab], {target: targets[tab], swap: 'innerHTML'});
+          }
+        });
+      }, 200);
+    }
+  }
+});
+
 function switchThreatsTab(tab) {
   document.querySelectorAll('.threats-tab').forEach(function(t) {
     t.style.color = '#666'; t.style.borderBottomColor = 'transparent'; t.classList.remove('active');
