@@ -9,7 +9,7 @@ REM
 REM  用法: 修改源码后双击运行，或在终端执行
 REM ============================================================
 
-set "SRC=F:\Home\Github\Trident\Trident_v1.0\Trident_1.7\Trident_1.7.9"
+set "SRC=F:\Home\Github\Trident\Trident_v1.0\Trident_1.8"
 set "DST=F:\Home\Recently\Trident_1.7.9"
 
 echo.
