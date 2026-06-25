@@ -44,7 +44,8 @@
   <div class="modal-container" style="width:700px; max-height:80vh; display:flex; flex-direction:column;">
     <div class="modal-header" style="display:flex; align-items:center; padding:12px 20px; border-bottom:1px solid #1a1a1a;">
       <h3 style="color:#00ff41; margin:0; flex:1;" id="system-modal-title">System</h3>
-      <button class="btn btn-ghost btn-sm" onclick="closeSystemModal()">Close</button>
+      <span id="system-modal-actions" style="display:flex; gap:6px;"></span>
+      <button class="btn btn-ghost btn-sm" onclick="closeSystemModal()" style="margin-left:8px;">Close</button>
     </div>
     <div class="modal-body" id="system-modal-body" style="flex:1; padding:20px; overflow-y:auto; min-height:300px;">
       <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>

@@ -254,16 +254,8 @@
     animation: fadeIn 0.3s ease-in, fadeOut 0.5s ease-out 4.5s forwards;
 }
 
-.wal-actions { display: flex; gap: 8px; margin-top: 16px; }
+}
 </style>
-
-<div class="wal-actions">
-    <button class="btn btn-ghost btn-sm"
-            hx-post="/admin/system/wal/replay"
-            hx-target="closest .modal-body"
-            hx-swap="innerHTML">Replay WAL</button>
-</div>
-
 <script>
 (function() {
     // 立即执行的IIFE，确保脚本在HTMX加载后运行

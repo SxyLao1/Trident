@@ -395,21 +395,29 @@ document.addEventListener('htmx:afterSwap', function(evt) {
 var _systemUrls = {
   registry: '/admin/system/registry_panel',
   wal: '/admin/system/wal_panel',
-  session: '/admin/system/session_panel',
+  session: '/admin/system/session_panel?per_page=6',
   config: '/admin/system/config_panel'
 };
 var _systemTitles = {
   registry: 'Registry Status', wal: 'WAL Management',
   session: 'Session Management', config: 'Config Reload'
 };
+var _systemActions = {
+  registry: '<button class=\"btn btn-ghost btn-sm\" hx-post=\"/admin/system/registry/compact\" hx-target=\"#system-modal-body\" hx-swap=\"innerHTML\">Compact</button>',
+  wal: '<button class=\"btn btn-ghost btn-sm\" hx-post=\"/admin/system/wal/replay\" hx-target=\"#system-modal-body\" hx-swap=\"innerHTML\">Replay</button>',
+  session: '<button class=\"btn btn-ghost btn-sm\" hx-post=\"/admin/system/session/cleanup\" hx-target=\"#system-modal-body\" hx-swap=\"innerHTML\">Cleanup</button>',
+  config: '<button class=\"btn btn-ghost btn-sm\" hx-post=\"/admin/system/config/reload\" hx-confirm=\"Reload config?\" hx-target=\"#system-modal-body\" hx-swap=\"innerHTML\">Reload</button>'
+};
 function openSystemModal(type) {
   var m = document.getElementById('system-modal');
   var t = document.getElementById('system-modal-title');
   var b = document.getElementById('system-modal-body');
+  var a = document.getElementById('system-modal-actions');
   if (!m || !b) return;
   m.style.display = 'flex'; m.style.visibility = 'visible'; m.style.opacity = '1';
   m.classList.add('active');
   if (t) t.textContent = _systemTitles[type] || type;
+  if (a) a.innerHTML = _systemActions[type] || '';
   b.innerHTML = '<div class=\"empty-state\"><div class=\"spinner\"></div><p>Loading...</p></div>';
   if (_systemUrls[type]) htmx.ajax('GET', _systemUrls[type], {target: '#system-modal-body', swap: 'innerHTML'});
 }
