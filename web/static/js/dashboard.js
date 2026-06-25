@@ -317,13 +317,31 @@ function filterLogAnalyzer() {
   var kw = (document.getElementById('analyzer-filter-input')?.value || '').toLowerCase();
   var lv = document.getElementById('analyzer-level-filter')?.value || 'all';
   var md = document.getElementById('analyzer-module-filter')?.value || 'all';
+  var tr = document.getElementById('analyzer-time-filter')?.value || 'all';
   var c = document.getElementById('analyzer-log-content'); if (!c) return;
+
+  // Time range
+  var now = Date.now(), minTime = 0;
+  if (tr === '1h') minTime = now - 3600000;
+  else if (tr === '6h') minTime = now - 21600000;
+  else if (tr === '24h') minTime = now - 86400000;
+  else if (tr === '7d') minTime = now - 604800000;
+
   var v = 0;
   c.querySelectorAll('.log-line').forEach(function(el) {
     var tx = el.textContent; var s = true;
     if (kw && tx.toLowerCase().indexOf(kw) < 0) s = false;
-    if (lv !== 'all' && tx.toUpperCase().indexOf('[' + lv + ']') < 0) s = false;
+    // Level: match ' CRITICAL ', '[CRITICAL]', or 'CRITICAL -'
+    if (lv !== 'all') {
+      var up = tx.toUpperCase();
+      if (up.indexOf(' ' + lv + ' ') < 0 && up.indexOf('[' + lv + ']') < 0 && up.indexOf(lv + ' -') < 0) s = false;
+    }
     if (md !== 'all' && tx.indexOf('[' + md + ']') < 0) s = false;
+    // Time range
+    if (minTime > 0) {
+      var m = tx.match(/\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+      if (m) { if (new Date(m[1].replace(' ', 'T')).getTime() < minTime) s = false; }
+    }
     el.style.display = s ? '' : 'none'; if (s) v++;
   });
   var ce = document.getElementById('analyzer-count'); if (ce) ce.textContent = v + ' lines';

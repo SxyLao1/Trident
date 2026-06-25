@@ -86,6 +86,14 @@
           <option value="SECURITY">SECURITY</option>
           <option value="ALERT">ALERT</option>
         </select>
+        <select id="analyzer-time-filter" onchange="filterLogAnalyzer()"
+                style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
+          <option value="all">All Time</option>
+          <option value="1h">Last 1 Hour</option>
+          <option value="6h">Last 6 Hours</option>
+          <option value="24h">Last 24 Hours</option>
+          <option value="7d">Last 7 Days</option>
+        </select>
         <span style="font-size:10px; color:#666;" id="analyzer-count">0 lines</span>
         <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="closeLogAnalyzer()">Close</button>
       </div>
