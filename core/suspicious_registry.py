@@ -378,8 +378,13 @@ def _flush_sync():
 
 
 def _load_registry() -> List[Dict]:
-    """加载注册表（确保路径已初始化）"""
+    """加载注册表（确保路径已初始化）。v1.7.9: 优先返回内存快照，避免异步保存导致的读写不一致。"""
     _init_paths()
+
+    # v1.7.9: 优先使用内存快照（避免异步保存未刷盘时读到旧数据）
+    global _last_registry_snapshot
+    if _last_registry_snapshot is not None:
+        return _last_registry_snapshot
 
     if _REGISTRY_PATH and _REGISTRY_PATH.exists():
         try:
