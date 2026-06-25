@@ -1,5 +1,5 @@
 <!-- v1.8.0: Hierarchical config editor v3 -->
-<div style="display:flex; flex-direction:column; gap:12px;">
+<div style="display:flex; flex-direction:column; gap:12px; overflow:visible;">
   <!-- Toolbar -->
   <div style="display:flex; align-items:center; gap:12px;">
     <input type="text" class="form-input" placeholder="Search config..." style="flex:1; max-width:300px; font-size:11px; padding:4px 8px;"
@@ -10,7 +10,7 @@
   </div>
 
   <!-- Tree -->
-  <div id="config-tree" style="font-family:var(--font-mono); font-size:12px; background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:8px 0;">
+  <div id="config-tree" style="font-family:var(--font-mono); font-size:12px; background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:8px 0; overflow:visible;">
     {% macro render_section(sec_name, fields, level) %}
     {% set indent = level * 18 %}
     <div class="cfg-section collapsed" data-section="{{ sec_name }}">
@@ -129,8 +129,8 @@
 .cfg-section:not(.collapsed) .cfg-arrow { transform:rotate(0deg); display:inline-block; }
 .cfg-info { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; border:1px solid #555; color:#555; font-size:9px; font-weight:bold; cursor:help; position:relative; flex-shrink:0; }
 .cfg-info:hover { border-color:#00ff41; color:#00ff41; }
-.cfg-info:hover::after { content:attr(data-tooltip); position:absolute; bottom:120%; left:50%; transform:translateX(-50%); background:#1a1a1a; color:#ccc; border:1px solid #00ff41; padding:4px 8px; font-size:10px; font-weight:normal; white-space:nowrap; border-radius:3px; z-index:9999; pointer-events:none; }
 .config-section.collapsed .config-section-body { display:none; }
+#cfg-tooltip { position:fixed; background:#0a0a0a; color:#ccc; border:1px solid #00ff41; padding:6px 10px; font-size:11px; border-radius:3px; z-index:99999; pointer-events:none; display:none; max-width:320px; white-space:normal; }
 .cfg-highlight { background:#0a1a0a; }
 </style>
 
@@ -217,4 +217,24 @@ function saveEnvVars() {
     else { if (el) { el.style.display = ''; el.textContent = 'Error: ' + (data.error || 'unknown'); el.style.color = '#ff4444'; } }
   });
 }
+// v1.8.0: JS tooltip - avoids CSS overflow clipping
+(function() {
+  var tip = document.createElement('div'); tip.id = 'cfg-tooltip'; document.body.appendChild(tip);
+  document.addEventListener('mouseover', function(e) {
+    var info = e.target.closest('.cfg-info');
+    if (info && info.dataset.tooltip) {
+      tip.textContent = info.dataset.tooltip;
+      tip.style.display = 'block';
+    }
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (tip.style.display === 'block') {
+      tip.style.left = (e.clientX + 12) + 'px';
+      tip.style.top = (e.clientY - 30) + 'px';
+    }
+  });
+  document.addEventListener('mouseout', function(e) {
+    if (e.target.closest('.cfg-info')) tip.style.display = 'none';
+  });
+})();
 </script>
