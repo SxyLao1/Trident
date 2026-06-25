@@ -107,8 +107,8 @@ def _save_db(records: List[Dict[str, Any]]) -> None:
     # 1. 写入临时文件
     with open(tmp_path, 'w', encoding='utf-8') as f:
         json.dump(records, f, ensure_ascii=False, indent=2)
-    f.flush()
-    os.fsync(f.fileno())
+        f.flush()
+        os.fsync(f.fileno())
 
     # 2. 保留旧文件作为备份
     if db_path.exists():
