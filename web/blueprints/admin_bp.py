@@ -1119,7 +1119,8 @@ def audit_records():
             page=page,
             total_pages=total_pages,
             total=total,
-            per_page=per_page
+            per_page=per_page,
+            audit_mode=True
         )
     except Exception as e:
         current_app.logger.error(f"[ADMIN] 审计视图加载失败: {e}", exc_info=True)
