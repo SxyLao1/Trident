@@ -328,6 +328,13 @@ function closeRecordDetail() {
   if (modal) { modal.style.display = 'none'; modal.classList.remove('active'); modal.innerHTML = ''; }
 }
 
+// v1.8.0: Auto-show record detail modal when content is swapped in
+document.addEventListener('htmx:afterSwap', function(evt) {
+  if (evt.detail.target.id === 'record-detail-modal') {
+    showRecordDetail();
+  }
+});
+
 // ESC key closes modals
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {

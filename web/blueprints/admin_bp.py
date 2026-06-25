@@ -141,18 +141,15 @@ def overview():
             auth_header = generate_secure_sse_token(username)
             session['sse_token'] = auth_header
 
-        # 加载历史日志（优先 SSE buffer，fallback 到 monitor.log）
+        # v1.8.0: 历史日志始终从 monitor.log 读取（buffer 仅用于 SSE 实时推送）
         import json
         log_history_html = ""
-
-        # 1. 优先从 SSE 日志缓冲区读取
         try:
-            buffer_file = normalize_path("data/sse_log_buffer.json")
-            if buffer_file.exists():
-                with open(buffer_file, 'r', encoding='utf-8') as f:
-                    buffer_data = json.load(f)
-                if isinstance(buffer_data, list):
-                    lines = buffer_data[-500:]
+            log_file = normalize_path("logs/Website-PhpStudy/monitor.log")
+            if log_file.exists():
+                with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    all_lines = f.readlines()
+                    lines = all_lines[-500:]
                     html_parts = []
                     for line in lines:
                         line = line.strip()
@@ -162,26 +159,7 @@ def overview():
                         html_parts.append(f'<div class="log-line">{safe_line}</div>')
                     log_history_html = ''.join(html_parts)
         except Exception:
-            pass  # 缓冲区损坏或为空，fallthrough 到 fallback
-
-        # 2. Fallback：从 monitor.log 读取最近500行
-        if not log_history_html:
-            try:
-                log_file = normalize_path("logs/Website-PhpStudy/monitor.log")
-                if log_file.exists():
-                    with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                        all_lines = f.readlines()
-                        lines = all_lines[-500:]
-                        html_parts = []
-                        for line in lines:
-                            line = line.strip()
-                            if not line or '[SSE]' in line:
-                                continue
-                            safe_line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                            html_parts.append(f'<div class="log-line">{safe_line}</div>')
-                        log_history_html = ''.join(html_parts)
-            except Exception:
-                pass
+            pass
 
         return render_template('admin/overview.html',
             auth_header=auth_header, username=username,
