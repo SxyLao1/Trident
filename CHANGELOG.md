@@ -46,6 +46,23 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.8.0-dev] - In Development
+
+### Added
+- Navigation refactor: 6→4 items (Overview/Threats/Rules/Settings)
+- Web Config Panel + dynamic config.toml editor + structured .env editor
+- Log Analyzer with 4-dimension filtering
+- System modals, Threats tabs, YARA batch operations
+
+### Changed
+- LIVE LOG reads history from monitor.log
+- Page toolbars stay in content, header reserved for multi-site selector
+
+### Fixed
+- HTMX script execution, modal overlay persistence, audit pagination, SSE buffer
+
+---
+
 ## [1.7.8] - 2026-05-27
 
 ### Added

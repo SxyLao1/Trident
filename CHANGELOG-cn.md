@@ -5,6 +5,23 @@
 
 ---
 
+## [1.8.0-dev] - 开发中
+
+### 新增
+- 导航重构：6项→4项（Overview / Threats / Rules / Settings）
+- Web 配置面板 + 动态 config.toml 编辑器 + 结构化 .env 编辑器
+- Log Analyzer 全屏日志分析器，四维过滤
+- System 管理弹窗 + Threats 标签页 + YARA 批量操作
+
+### 变更
+- LIVE LOG 从 monitor.log 读历史，页面工具栏回归内容区
+- 启动 banner 去重，Settings 等高布局
+
+### 修复
+- HTMX script 不执行、Detail 遮罩残留、Audit 翻页参数、SSE buffer 损坏
+
+---
+
 ## [1.7.9] - 2026-06-25
 
 ### 新增
