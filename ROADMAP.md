@@ -1,12 +1,18 @@
 # Roadmap
 
-> **Current Version**: v1.7.8 (Stable)  
+> **Current Version**: v1.7.9-stable (2026-06-25)  
 > **Next Milestone**: v1.8.0  
 > **Vision**: Lightweight Web Perimeter Security — Passive Detection + Semi-Active Response
 
 ---
 
-## v1.8.0 — Threat Detection Expansion (2026-Q3)
+## v1.7.9-stable — Quarantine Pipeline + Security Hardening ✅ (Complete)
+
+See [CHANGELOG.md](./CHANGELOG.md).
+
+---
+
+## v1.8.0 — Web Config Panel + Threat Detection Expansion (2026-Q3)
 
 **Goal**: Expand from "WebShell-only" to "Web-layer threat detection platform".
 

@@ -7,6 +7,45 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.7.9] - 2026-06-25
+
+### Added
+- Automated file quarantine: `core/quarantine.py` with isolate/restore/delete
+- Recursive webshell scan tool: `tools/recursive_webshell_scan.py`
+- Shared auth module: `web/auth.py`
+- Smart notification batching: success aggregated (50/batch or 5min), failure immediate
+- Restore whitelist: 30s TTL prevents re-quarantine of restored files
+- Playwright-based automated frontend testing
+- `sync_to_runtime.bat` for instant test deployment
+- Quarantine detail modal with inline content loading
+
+### Changed
+- Registry+Quarantine pipeline unified in `_do_scan()` (single transaction)
+- `scanner.py` no longer has side effects (pure scan only)
+- Log symbols reorganized: 98 symbols across 13 functional modules
+- Versioning: single source of truth in `config.toml` → `config/version.py`
+- Terminal output: emoji replaced with `[OK]/[ERR]/[WARN]` labels
+- Records page: shows only active threats (quarantined files in Audit view)
+- Git tag versioning replaces directory-based backup
+
+### Fixed
+- 6 security vulnerabilities (V-001~V-006): auth bypass, path traversal, info leak, rate limiting
+- 5 quarantine pipeline bugs: async race, atomic write indent, file_size timing, DELETE overwrite, orphan records
+- Quarantine detail/pagination: HTMX CSRF injection, audit pagination params, block template overrides
+- Record detail modal: blur overlay not removed on close
+- Login spam: empty-username POSTs no longer log as failures
+- `loadDashboard()` no longer overwrites quarantine/audit page content
+- `__pycache__` excluded from git
+
+### Security
+- V-001/V-002: YARA rules unauthorized read/write (CRITICAL) — all `/admin/yara/*` routes now require auth
+- V-003: YARA search unauthorized access (HIGH)
+- V-004: Path traversal DoS (MEDIUM) — unified `_validate_rule_path()` with null byte detection
+- V-005: Server info leak (LOW) — Werkzeug version hidden via monkey-patch
+- V-006: Login brute force (LOW) — in-memory rate limiter (5/min/IP)
+
+---
+
 ## [1.7.8] - 2026-05-27
 
 ### Added
