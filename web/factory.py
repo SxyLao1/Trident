@@ -83,13 +83,23 @@ def create_app() -> Flask:
     _csrf = CSRFProtect()
     _csrf.init_app(app)
 
+    # v1.7.9: V-005修复 — WSGI中间件级隐藏服务器指纹
+    # Werkzeug开发服务器在Flask after_request之后才加Server头，必须在WSGI层拦截
+    class _RemoveServerHeaderMiddleware:
+        def __init__(self, wsgi_app):
+            self.wsgi_app = wsgi_app
+        def __call__(self, environ, start_response):
+            def _start_response(status, headers, exc_info=None):
+                headers = [(k, v) for k, v in headers if k.lower() != 'server']
+                return start_response(status, headers, exc_info)
+            return self.wsgi_app(environ, _start_response)
+    app.wsgi_app = _RemoveServerHeaderMiddleware(app.wsgi_app)
+
     @app.after_request
     def add_no_cache_headers(response):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
-        # v1.7.9: V-005修复 — 隐藏服务器指纹
-        response.headers.pop('Server', None)
         return response
 
     # 注册Blueprint
@@ -115,4 +125,13 @@ def get_app() -> Flask:
 def run_app(host: str = "127.0.0.1", port: int = 8080, threaded: bool = True):
     """统一启动Flask应用"""
     app = create_app()
+    # v1.7.9: V-005修复 — 禁掉Werkzeug开发服务器的版本信息输出
+    # Werkzeug在底层BaseHTTPRequestHandler里硬编码了server_version和sys_version，
+    # 不关掉的话每个响应都会带 Server: Werkzeug/x.x.x Python/x.x.x
+    try:
+        from werkzeug.serving import WSGIRequestHandler
+        WSGIRequestHandler.server_version = ""    # 清掉 Werkzeug 版本
+        WSGIRequestHandler.sys_version = ""       # 清掉 Python 版本
+    except Exception:
+        pass
     app.run(host=host, port=port, threaded=threaded, debug=False)
