@@ -179,6 +179,16 @@ monitor_start = "[MONITOR][START][INFO]"
 monitor_stop  = "[MONITOR][STOP][INFO]"
 error_notifier_queue = "[NOTIFIER][QUEUE][ERROR]"
 
+# ==================== v1.7.9 隔离模块 ====================
+quarantine_add     = "[QUARANTINE][ADD][SUCCESS]"
+quarantine_skip    = "[QUARANTINE][SKIP][WARNING]"
+quarantine_recover = "[QUARANTINE][RECOVER][INFO]"
+quarantine_restore = "[QUARANTINE][RESTORE][SUCCESS]"
+quarantine_delete  = "[QUARANTINE][DELETE][SUCCESS]"
+
+# ==================== v1.7.9 扫描/队列 ====================
+scan_queue_full = "[SCAN][QUEUE][WARNING]"
+
 # ============================================================================
 # v1.7.0新增：通用阈值配置
 # ============================================================================
