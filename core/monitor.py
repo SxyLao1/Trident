@@ -96,6 +96,11 @@ class FileMonitorHandler(FileSystemEventHandler):
         self.notifier = None
         self._init_notifier()
 
+        # v1.7.9: 批量通知 — 隔离成功聚合发送，避免邮件轰炸
+        self._batch_notify_queued = 0
+        self._batch_notify_threshold = 50  # 每50条成功隔离发一次聚合通知
+        self._batch_notify_last_flush = time.time()
+
         log_with_symbol("success", "debug",
                         f"处理器初始化完成 | 平台: {self._platform} | "
                         f"验证延迟: {self._verify_delay_ms}ms | "
@@ -338,6 +343,23 @@ class FileMonitorHandler(FileSystemEventHandler):
         except Exception as e:
             log_with_symbol("error_notifier_init", "error", f"初始化失败: {e}", self.logger)
 
+    def _flush_batch_notify(self):
+        """v1.7.9: 发送聚合的批量隔离成功通知"""
+        if self._batch_notify_queued <= 0:
+            return
+        count = self._batch_notify_queued
+        self._batch_notify_queued = 0
+        self._batch_notify_last_flush = time.time()
+        try:
+            self._init_notifier()
+            self.notifier._safe_notify(
+                f"批量隔离完成\n已自动隔离 {count} 个WebShell文件",
+                level="INFO"
+            )
+            self.logger.info(f"[BATCH_NOTIFY] 聚合发送: {count} 条隔离成功")
+        except Exception as e:
+            self.logger.warning(f"[BATCH_NOTIFY] 发送失败: {e}")
+
     def _detect_script_magic_number(self, file_path: Path) -> bool:
         """魔术头检测 (保持原有逻辑)"""
         cache_key = str(file_path.resolve())
@@ -482,6 +504,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                                 f"{event_path.name} | 引擎: {scan_result.engine}", self.logger)
 
                 # v1.7.9: 统一在此处完成 注册→隔离→回写，保证事务完整性
+                quarantined = False
                 try:
                     from core.suspicious_registry import add, mark_quarantined
 
@@ -499,6 +522,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                     if result is not None:
                         # Step 3: 隔离成功 → 回写quarantine_id到Registry
                         mark_quarantined(str(event_path), result["quarantine_id"])
+                        quarantined = True
                         log_with_symbol("quarantine_add", "info",
                                         f"[QUARANTINE] 已隔离: {event_path.name} -> {result['quarantine_id']}", self.logger)
                     else:
@@ -506,12 +530,21 @@ class FileMonitorHandler(FileSystemEventHandler):
                 except Exception as qe:
                     self.logger.warning(f"[QUARANTINE] 隔离失败: {event_path.name} | {qe}")
 
-                # 告警通知
+                # v1.7.9: 智能通知策略
+                # - 隔离成功: 批量聚合，每50条或每5分钟通知一次（避免邮件轰炸）
+                # - 隔离失败: 立即通知（需要人工介入）
                 self._init_notifier()
-                self.notifier._safe_notify(
-                    f"WebShell检测到！\n文件: {scan_result.file_path}\n规则: {', '.join(scan_result.features[:3])}",
-                    level="CRITICAL"
-                )
+                if quarantined:
+                    self._batch_notify_queued += 1
+                    elapsed = time.time() - self._batch_notify_last_flush
+                    if self._batch_notify_queued >= self._batch_notify_threshold or elapsed > 300:
+                        self._flush_batch_notify()
+                else:
+                    # 隔离失败/跳过 → 立即告警
+                    self.notifier._safe_notify(
+                        f"隔离失败！\n文件: {scan_result.file_path}\n规则: {', '.join(scan_result.features[:3])}",
+                        level="WARNING"
+                    )
 
         except Exception as e:
             log_with_symbol("error_scan", "error", f"{event_path}: {e}", self.logger)
@@ -688,12 +721,17 @@ class FileMonitorHandler(FileSystemEventHandler):
                             qr = quarantine_file(str(dest_path), result.features[0] if result.features else "unknown", result.features, str(dest_path))
                             if qr:
                                 mark_quarantined(str(dest_path), qr["quarantine_id"])
-                            # 通知
-                            self._init_notifier()
-                            self.notifier._safe_notify(
-                                f"WebShell改名后检测到！\n文件: {dest_path}",
-                                level="CRITICAL"
-                            )
+                                # 成功走批量聚合
+                                self._batch_notify_queued += 1
+                                if self._batch_notify_queued >= self._batch_notify_threshold:
+                                    self._flush_batch_notify()
+                            else:
+                                # 失败立即通知
+                                self._init_notifier()
+                                self.notifier._safe_notify(
+                                    f"隔离失败(改名文件)！\n文件: {dest_path}",
+                                    level="WARNING"
+                                )
                     except Exception as e:
                         log_with_symbol("error_scan", "error", f"{dest_path}: {e}", self.logger)
             else:
@@ -808,6 +846,13 @@ class WebsiteMonitor:
         """停止监控"""
         if not self._is_running:
             return
+
+        # v1.7.9: 停止前发送剩余的聚合通知
+        if hasattr(self, 'handler') and hasattr(self.handler, '_flush_batch_notify'):
+            try:
+                self.handler._flush_batch_notify()
+            except Exception:
+                pass
 
         self.observer.stop()
         self.observer.join(timeout=10.0)
