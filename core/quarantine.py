@@ -170,6 +170,9 @@ def quarantine_file(
 
         quarantine_file = date_dir / f"{qid}_{src.name}"
 
+        # 在移动前捕获文件大小（移动后 src 不存在会抛 FileNotFoundError）
+        file_size = src.stat().st_size
+
         # 移动文件（不是复制，原位置删除）
         try:
             shutil.move(str(src), str(quarantine_file))
@@ -190,7 +193,7 @@ def quarantine_file(
             "quarantine_time": datetime.now().isoformat(),
             "rule_name": rule_name,
             "features": features,
-            "file_size": src.stat().st_size,
+            "file_size": file_size,
             "status": "quarantined",  # quarantined | restored | deleted
         }
 
