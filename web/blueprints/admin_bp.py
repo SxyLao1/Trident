@@ -212,8 +212,53 @@ def settings_notifications():
 @admin_bp.route('/settings/config/editor')
 @require_auth
 def settings_config_editor():
-    """v1.8.0: 动态 config.toml 编辑器页面片段"""
-    return render_template('admin/panels/config_editor.html')
+    """v1.8.0: 动态 config.toml 编辑器 —— 服务端解析结构，模板渲染"""
+    try:
+        config_path = ConfigRegistry._config_path
+        sections = {}
+        current_section = None
+        pending_desc = None
+
+        with open(config_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith('# @desc:'):
+                pending_desc = stripped.split('@desc:', 1)[1].strip()
+                continue
+            if stripped.startswith('#') or not stripped:
+                continue
+            if stripped.startswith('[') and stripped.endswith(']'):
+                current_section = stripped[1:-1]
+                sections[current_section] = []
+                continue
+            if '=' in stripped and current_section:
+                key, _, value = stripped.partition('=')
+                key = key.strip()
+                raw = value.strip().rstrip('#').strip()
+                if raw.startswith('"') and raw.endswith('"'):
+                    ftype, fval = 'string', raw[1:-1]
+                elif raw.lower() in ('true', 'false'):
+                    ftype, fval = 'bool', raw.lower() == 'true'
+                elif raw.startswith('['):
+                    ftype, fval = 'array', raw
+                elif raw.replace('.', '').replace('-', '').isdigit() or (raw.startswith('-') and raw[1:].replace('.', '').isdigit()):
+                    ftype = 'float' if '.' in raw else 'int'
+                    fval = float(raw) if '.' in raw else int(raw)
+                else:
+                    ftype, fval = 'string', raw
+                sections[current_section].append({
+                    'key': key, 'value': fval, 'type': ftype, 'raw': raw,
+                    'desc': pending_desc or ''
+                })
+                pending_desc = None
+
+        return render_template('admin/panels/config_editor.html',
+            sections=sections, config_path=str(config_path))
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] config editor failed: {e}", exc_info=True)
+        return f'<div style="color:#ff4444;">Config load error: {e}</div>', 500
 
 
 @admin_bp.route('/settings/config/save', methods=['POST'])

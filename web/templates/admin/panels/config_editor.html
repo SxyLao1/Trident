@@ -1,99 +1,69 @@
-<!-- v1.8.0: Dynamic config.toml editor -->
+<!-- v1.8.0: Dynamic config.toml editor — server-rendered -->
 <div id="config-editor" style="display:flex; flex-direction:column; gap:16px;">
   <div style="display:flex; align-items:center; gap:12px;">
-    <span style="color:#888; font-size:12px;">Config path: <code style="color:#ccc;" id="config-path">...</code></span>
+    <span style="color:#888; font-size:12px;">Path: <code style="color:#ccc;">{{ config_path }}</code></span>
     <span style="flex:1;"></span>
+    <span id="config-saved" style="color:#00ff41; font-size:12px; display:none;">Saved OK</span>
     <button class="btn btn-primary btn-sm" onclick="saveConfig()">Save Changes</button>
   </div>
   <div id="config-sections">
-    <div class="empty-state"><div class="spinner"></div><p>Loading configuration...</p></div>
+    {% for sec_name, fields in sections.items() %}
+    <div class="config-section">
+      <div class="config-section-header" onclick="var b=this.nextElementSibling;b.style.display=b.style.display==='none'?'':'none'">
+        <h4>[{{ sec_name }}]</h4>
+        <span style="color:#666; font-size:10px;">{{ fields|length }} fields</span>
+      </div>
+      <div class="config-section-body" {% if loop.index > 5 %}style="display:none;"{% endif %}>
+        {% for f in fields %}
+        <div class="config-field">
+          <label>{{ f.key }}</label>
+          {% if f.desc %}
+          <span class="config-info" data-tooltip="{{ f.desc }}">i</span>
+          {% else %}
+          <span style="width:16px;"></span>
+          {% endif %}
+          {% if f.type == 'bool' %}
+          <input type="checkbox" data-key="{{ sec_name }}.{{ f.key }}" {% if f.value %}checked{% endif %} onchange="markDirty()">
+          <span style="color:#888; font-size:11px;">{{ 'true' if f.value else 'false' }}</span>
+          {% elif f.type in ('int', 'float') %}
+          <input type="number" value="{{ f.value }}" data-key="{{ sec_name }}.{{ f.key }}" onchange="markDirty()" style="max-width:200px;">
+          {% elif f.type == 'array' %}
+          <input type="text" value="{{ f.raw }}" data-key="{{ sec_name }}.{{ f.key }}" onchange="markDirty()">
+          {% else %}
+          <input type="text" value="{{ f.value }}" data-key="{{ sec_name }}.{{ f.key }}" onchange="markDirty()">
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
   </div>
 </div>
 
 <style>
-.config-section { background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; margin-bottom:12px; }
-.config-section-header { display:flex; align-items:center; padding:10px 16px; cursor:pointer; border-bottom:1px solid #1a1a1a; }
+.config-section { background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; margin-bottom:10px; }
+.config-section-header { display:flex; align-items:center; padding:8px 14px; cursor:pointer; border-bottom:1px solid #1a1a1a; }
 .config-section-header:hover { background:#111; }
 .config-section-header h4 { color:#00ff41; margin:0; font-size:13px; flex:1; }
-.config-section-body { padding:12px 16px; display:flex; flex-direction:column; gap:8px; }
-.config-field { display:flex; align-items:center; gap:8px; padding:4px 0; }
-.config-field label { color:#ccc; font-size:12px; min-width:180px; font-family:var(--font-mono); }
+.config-section-body { padding:10px 14px; display:flex; flex-direction:column; gap:6px; }
+.config-field { display:flex; align-items:center; gap:8px; padding:2px 0; }
+.config-field label { color:#ccc; font-size:11px; min-width:180px; font-family:var(--font-mono); }
 .config-field input[type="text"],
-.config-field input[type="number"] { flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:12px; border-radius:3px; font-family:var(--font-mono); }
-.config-field input[type="checkbox"] { accent-color:#00ff41; width:16px; height:16px; }
-.config-info {
-  display:inline-flex; align-items:center; justify-content:center;
-  width:16px; height:16px; border-radius:50%; border:1px solid #666;
-  color:#666; font-size:10px; font-weight:bold; cursor:help;
-  position:relative; flex-shrink:0;
-}
+.config-field input[type="number"] { flex:1; background:#000; color:#ccc; border:1px solid #333; padding:3px 6px; font-size:11px; border-radius:3px; font-family:var(--font-mono); }
+.config-field input[type="checkbox"] { accent-color:#00ff41; width:15px; height:15px; }
+.config-info { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%; border:1px solid #666; color:#666; font-size:10px; font-weight:bold; cursor:help; position:relative; flex-shrink:0; }
 .config-info:hover { border-color:#00ff41; color:#00ff41; }
-.config-info:hover::after {
-  content:attr(data-tooltip);
-  position:absolute; bottom:120%; left:50%; transform:translateX(-50%);
-  background:#1a1a1a; color:#ccc; border:1px solid #00ff41; padding:6px 10px;
-  font-size:11px; font-weight:normal; white-space:nowrap; border-radius:3px;
-  z-index:10; pointer-events:none;
-}
-.config-saved { color:#00ff41; font-size:12px; display:none; }
+.config-info:hover::after { content:attr(data-tooltip); position:absolute; bottom:120%; left:50%; transform:translateX(-50%); background:#1a1a1a; color:#ccc; border:1px solid #00ff41; padding:5px 8px; font-size:10px; font-weight:normal; white-space:nowrap; border-radius:3px; z-index:10; pointer-events:none; }
 </style>
 
 <script>
-var _configData = null;
-
-// Load config on page init
-(function() {
-  fetch('/admin/settings/config/data')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      _configData = data;
-      document.getElementById('config-path').textContent = data.path;
-      renderConfig(data.sections);
-    });
-})();
-
-function renderConfig(sections) {
-  var container = document.getElementById('config-sections');
-  var html = '';
-  var secKeys = Object.keys(sections).sort();
-  for (var i = 0; i < secKeys.length; i++) {
-    var key = secKeys[i];
-    var sec = sections[key];
-    var collapsed = i > 4 ? ' style=\"display:none\"' : '';  // collapse sections beyond first 5
-    html += '<div class=\"config-section\">';
-    html += '<div class=\"config-section-header\" onclick=\"var b=this.nextElementSibling;b.style.display=b.style.display===\\'none\\'?\\'\\':\\'none\\'\"><h4>[' + key + ']</h4><span style=\"color:#666;font-size:10px;\">' + Object.keys(sec.fields).length + ' fields</span></div>';
-    html += '<div class=\"config-section-body\"' + collapsed + '>';
-    var fkeys = Object.keys(sec.fields).sort();
-    for (var j = 0; j < fkeys.length; j++) {
-      var fk = fkeys[j];
-      var f = sec.fields[fk];
-      html += '<div class=\"config-field\">';
-      html += '<label>' + fk + '</label>';
-      if (f.desc) {
-        html += '<span class=\"config-info\" data-tooltip=\"' + f.desc.replace(/\"/g, '&quot;') + '\">i</span>';
-      } else {
-        html += '<span style=\"width:16px;\"></span>';
-      }
-      if (f.type === 'bool') {
-        html += '<input type=\"checkbox\" data-key=\"' + key + '.' + fk + '\" ' + (f.value ? 'checked' : '') + ' onchange=\"markDirty()\">';
-        html += '<span style=\"color:#888;font-size:11px;\">' + (f.value ? 'true' : 'false') + '</span>';
-      } else if (f.type === 'int' || f.type === 'float') {
-        html += '<input type=\"number\" value=\"' + f.value + '\" data-key=\"' + key + '.' + fk + '\" onchange=\"markDirty()\" style=\"max-width:200px;\">';
-      } else if (f.type === 'array') {
-        html += '<input type=\"text\" value=\"' + f.value.replace(/\"/g, '&quot;') + '\" data-key=\"' + key + '.' + fk + '\" onchange=\"markDirty()\">';
-      } else {
-        html += '<input type=\"text\" value=\"' + String(f.value).replace(/\"/g, '&quot;').replace(/</g, '&lt;') + '\" data-key=\"' + key + '.' + fk + '\" onchange=\"markDirty()\">';
-      }
-      html += '</div>';
-    }
-    html += '</div></div>';
-  }
-  container.innerHTML = html;
-}
+// These functions run because config_editor.html is loaded via HTMX hx-get (not innerHTML)
+// hx-trigger="load" on the parent card triggers this request, and HTMX DOES execute scripts
+// from hx-get responses (unlike innerHTML).
 
 function markDirty() {
   var el = document.getElementById('config-saved');
-  if (el) { el.style.display = 'none'; }
+  if (el) el.style.display = 'none';
 }
 
 function saveConfig() {
@@ -110,7 +80,7 @@ function saveConfig() {
 
   fetch('/admin/settings/config/save', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name=\"csrf-token\"]')?.content || ''},
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
     body: JSON.stringify({changes: changes})
   })
   .then(function(r) { return r.json(); })
