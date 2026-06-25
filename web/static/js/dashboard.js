@@ -391,11 +391,40 @@ document.addEventListener('htmx:afterSwap', function(evt) {
   }
 });
 
+// v1.8.0: System modal (Settings page)
+var _systemUrls = {
+  registry: '/admin/system/registry_panel',
+  wal: '/admin/system/wal_panel',
+  session: '/admin/system/session_panel',
+  config: '/admin/system/config_panel'
+};
+var _systemTitles = {
+  registry: 'Registry Status', wal: 'WAL Management',
+  session: 'Session Management', config: 'Config Reload'
+};
+function openSystemModal(type) {
+  var m = document.getElementById('system-modal');
+  var t = document.getElementById('system-modal-title');
+  var b = document.getElementById('system-modal-body');
+  if (!m || !b) return;
+  m.style.display = 'flex'; m.style.visibility = 'visible'; m.style.opacity = '1';
+  m.classList.add('active');
+  if (t) t.textContent = _systemTitles[type] || type;
+  b.innerHTML = '<div class=\"empty-state\"><div class=\"spinner\"></div><p>Loading...</p></div>';
+  if (_systemUrls[type]) htmx.ajax('GET', _systemUrls[type], {target: '#system-modal-body', swap: 'innerHTML'});
+}
+function closeSystemModal() {
+  var m = document.getElementById('system-modal'); if (!m) return;
+  m.style.display = 'none'; m.style.visibility = 'hidden'; m.style.opacity = '0';
+  m.classList.remove('active');
+}
+
 // ESC key closes modals
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closeRecordDetail();
     closeLogAnalyzer();
+    closeSystemModal();
   }
 });
 
