@@ -29,7 +29,9 @@ class TestConfigAPI(unittest.TestCase):
         from config.version import get_version
         version = get_version()
         self.assertIsInstance(version, str)
-        self.assertRegex(version, r"^\d+\.\d+\.\d+$")
+        # v1.8.0: 兼容 semver 后缀 (-dev, -alpha, -rc1 等)
+        self.assertRegex(version, r"^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$")
+        self.assertNotEqual(version, "unknown")
 
     def test_config_load(self):
         from config.loader import load_config
