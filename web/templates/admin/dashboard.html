@@ -5,6 +5,13 @@
   <meta charset="utf-8">
   <meta name="sse-token" content="{{ auth_header|safe }}">
   <meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
+  <!-- v1.7.9: HTMX全局CSRF注入 — 所有hx-post自动携带token -->
+  <script>
+    document.body.addEventListener('htmx:configRequest', function(evt) {
+      var token = document.querySelector('meta[name="csrf-token"]')?.content;
+      if (token) { evt.detail.headers['X-CSRFToken'] = token; }
+    });
+  </script>
   <meta name="sse-max-total-clients" content="{{ config.get('web_admin', {}).get('sse_max_total_clients', 20) }}">
   <meta name="sse-max-per-ip" content="{{ config.get('web_admin', {}).get('sse_max_clients_per_ip', 5) }}">
   <meta name="sse-log-levels" content="{{ config.get('web_admin', {}).get('sse_log_levels', ['INFO', 'ERROR', 'CRITICAL']) | tojson | safe }}">

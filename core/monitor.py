@@ -507,40 +507,44 @@ class FileMonitorHandler(FileSystemEventHandler):
                 quarantined = False
                 try:
                     from core.suspicious_registry import add, mark_quarantined
+                    from core.quarantine import is_recently_restored
 
                     # Step 1: 注册到Registry（从scanner移至此，确保不遗漏）
                     add(event_path, scan_result.features)
 
-                    # Step 2: 隔离文件
-                    rule_name = scan_result.features[0] if scan_result.features else "unknown"
-                    result = quarantine_file(
-                        file_path=str(event_path),
-                        rule_name=rule_name,
-                        features=scan_result.features,
-                        original_path=str(event_path)
-                    )
-                    if result is not None:
-                        # Step 3: 隔离成功 → 回写quarantine_id到Registry
-                        mark_quarantined(str(event_path), result["quarantine_id"])
-                        quarantined = True
-                        log_with_symbol("quarantine_add", "info",
-                                        f"[QUARANTINE] 已隔离: {event_path.name} -> {result['quarantine_id']}", self.logger)
+                    # Step 2: 检查恢复白名单 → 跳过隔离
+                    if is_recently_restored(str(event_path)):
+                        self.logger.info(f"[QUARANTINE] 跳过刚恢复文件: {event_path.name}")
                     else:
-                        self.logger.warning(f"[QUARANTINE] 隔离跳过: {event_path.name} (文件不存在)")
+                        # Step 3: 隔离文件
+                        rule_name = scan_result.features[0] if scan_result.features else "unknown"
+                        result = quarantine_file(
+                            file_path=str(event_path),
+                            rule_name=rule_name,
+                            features=scan_result.features,
+                            original_path=str(event_path)
+                        )
+                        if result is not None:
+                            # 隔离成功 → 回写quarantine_id到Registry
+                            mark_quarantined(str(event_path), result["quarantine_id"])
+                            quarantined = True
+                            log_with_symbol("quarantine_add", "info",
+                                            f"[QUARANTINE] 已隔离: {event_path.name} -> {result['quarantine_id']}", self.logger)
+                        else:
+                            self.logger.warning(f"[QUARANTINE] 隔离跳过: {event_path.name} (文件不存在)")
                 except Exception as qe:
                     self.logger.warning(f"[QUARANTINE] 隔离失败: {event_path.name} | {qe}")
 
                 # v1.7.9: 智能通知策略
-                # - 隔离成功: 批量聚合，每50条或每5分钟通知一次（避免邮件轰炸）
-                # - 隔离失败: 立即通知（需要人工介入）
                 self._init_notifier()
                 if quarantined:
+                    # 隔离成功: 批量聚合
                     self._batch_notify_queued += 1
                     elapsed = time.time() - self._batch_notify_last_flush
                     if self._batch_notify_queued >= self._batch_notify_threshold or elapsed > 300:
                         self._flush_batch_notify()
-                else:
-                    # 隔离失败/跳过 → 立即告警
+                elif not is_recently_restored(str(event_path)):
+                    # 隔离失败（非白名单跳过）→ 立即告警
                     self.notifier._safe_notify(
                         f"隔离失败！\n文件: {scan_result.file_path}\n规则: {', '.join(scan_result.features[:3])}",
                         level="WARNING"

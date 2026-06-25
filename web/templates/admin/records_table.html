@@ -53,7 +53,7 @@
   {% if total_pages > 1 %}
   <div class="pagination-bar">
     <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %}
-            hx-get="/admin/records?page={{ page - 1 }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}"
+            hx-get="/admin/records?page={{ page - 1 }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}{% if audit_mode %}&audit=1{% endif %}"
             hx-target="#records-table-container"
             hx-swap="outerHTML">← Prev</button>
     <span class="page-info">Page {{ page }} / {{ total_pages }} ({{ total }} total)</span>
@@ -62,7 +62,7 @@
              onkeydown="if(event.key==='Enter'){var p=this.value,url='/admin/records?page='+p+'{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}';htmx.ajax('GET',url,{target:'#records-table-container',swap:'outerHTML'})}">
     </div>
     <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %}
-            hx-get="/admin/records?page={{ page + 1 }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}"
+            hx-get="/admin/records?page={{ page + 1 }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}{% if audit_mode %}&audit=1{% endif %}"
             hx-target="#records-table-container"
             hx-swap="outerHTML">Next →</button>
   </div>

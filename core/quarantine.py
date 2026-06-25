@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import threading
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +33,10 @@ from utils.logger_factory import log_with_symbol
 _quarantine_lock = threading.RLock()
 _quarantine_dir: Optional[Path] = None
 _quarantine_db: Optional[Path] = None
+
+# v1.7.9: 恢复文件白名单 — 刚恢复的文件30秒内不被重新隔离
+_recently_restored: dict = {}  # {normalized_path: expire_timestamp}
+_restored_ttl = 30  # 秒
 
 
 def _get_quarantine_dir() -> Path:
@@ -241,6 +246,9 @@ def restore_file(quarantine_id: str) -> Dict[str, Any]:
         # 移动回原始位置
         shutil.move(str(quarantine_path), str(original_path))
 
+        # v1.7.9: 加入恢复白名单，30秒内不被重新隔离
+        _recently_restored[str(original_path.resolve())] = time.time() + _restored_ttl
+
         # 更新记录状态
         record["status"] = "restored"
         record["restore_time"] = datetime.now().isoformat()
@@ -283,6 +291,21 @@ def delete_quarantine(quarantine_id: str) -> None:
 
         log_with_symbol("quarantine_delete", "INFO",
                         f"[QUARANTINE] 文件已永久删除: {quarantine_id}")
+
+
+def is_recently_restored(file_path: str) -> bool:
+    """v1.7.9: 检查文件是否在恢复白名单内（刚恢复的文件暂不重新隔离）"""
+    try:
+        key = str(Path(file_path).resolve())
+        expire = _recently_restored.get(key, 0)
+        if time.time() < expire:
+            return True
+        # 过期清理
+        if key in _recently_restored:
+            del _recently_restored[key]
+    except Exception:
+        pass
+    return False
 
 
 def get_quarantine_list(
