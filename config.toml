@@ -75,84 +75,95 @@ dir_cache_timeout_seconds = 60.0
 # 业务代码通过 log_with_symbol(symbol_key, level, message) 调用
 # ============================================================================
 [logging.symbols]
-# ==================== P0级核心符号（生产必须） ====================
-success      = "[MONITOR][START][SUCCESS]"
-critical_start = "[MONITOR][START][CRITICAL]"
-create_dir   = "[MONITOR][CREATE][DIR]"
-delete_dir   = "[MONITOR][DELETE][DIR]"
-create_file  = "[MONITOR][CREATE][FILE]"
-create_wait  = "[MONITOR][CREATE][WAIT]"
-create_skip  = "[MONITOR][CREATE][SKIP]"
-delete_file  = "[MONITOR][DELETE][FILE]"
-modify       = "[MONITOR][MODIFY][FILE]"
-close        = "[MONITOR][CLOSE][FILE]"
-create_error = "[MONITOR][CREATE][ERROR]"
-move_file    = "[MONITOR][MOVE][FILE]"
-move_dir     = "[MONITOR][MOVE][DIR]"
-scan_hit     = "[SCAN][FILE][HIT]"
-scan_safe    = "[SCAN][FILE][SAFE]"
-scan_skip    = "[SCAN][SKIP][NONE]"
-skip_duplicate = "[MONITOR][SKIP][DUPLICATE]"
-skip_exclude   = "[MONITOR][SKIP][EXCLUDE]"
-skip_size      = "[MONITOR][SKIP][SIZE_LIMIT]"
-log_monitor_skip_duplicate = "[LOG_MONITOR][SKIP][DUPLICATE]"
-log_monitor_start_error    = "[LOG_MONITOR][START][ERROR]"
-log_monitor_start          = "[LOG_MONITOR][START][SUCCESS]"
-log_monitor_info           = "[LOG_MONITOR][START][INFO]"
-log_monitor_stop           = "[LOG_MONITOR][STOP][INFO]"
-log_monitor_skip           = "[LOG_MONITOR][SKIP][INFO]"
-log_monitor_error          = "[LOG_MONITOR][ERROR][INFO]"
-log_monitor_warning        = "[LOG_MONITOR][WARNING][INFO]"
-system_info_start = "[SYSTEM][INFO][START]"
+# ============================================================================
+# 日志符号表 — 按功能模块分类，格式: key = "[MODULE][SUB][ACTION]"
+# 业务代码通过 log_with_symbol(symbol_key, level, message) 调用
+# 未匹配的 key 会输出 [UNKNOWN][key]，发现后请在此补全
+# ============================================================================
 
-# ==================== 警告级符号 ====================
-warning_config_reload = "[CONFIG][RELOAD][WARNING]"
-warning_wal_fail      = "[REGISTRY][WAL][WARNING]"
-notice_yara_skip      = "[SCAN][YARA][NOTICE]"
-warning_exclude       = "[MONITOR][SKIP][WARNING]"
+# ── 监控模块 (MONITOR) ─────────────────────────────────────────────
+success         = "[MONITOR][START][SUCCESS]"
+monitor_start   = "[MONITOR][START][INFO]"
+monitor_stop    = "[MONITOR][STOP][INFO]"
+critical_start  = "[MONITOR][START][CRITICAL]"
+create_dir      = "[MONITOR][CREATE][DIR]"
+create_file     = "[MONITOR][CREATE][FILE]"
+create_wait     = "[MONITOR][CREATE][WAIT]"
+create_skip     = "[MONITOR][CREATE][SKIP]"
+create_error    = "[MONITOR][CREATE][ERROR]"
+delete_dir      = "[MONITOR][DELETE][DIR]"
+delete_file     = "[MONITOR][DELETE][FILE]"
+modify          = "[MONITOR][MODIFY][FILE]"
+close           = "[MONITOR][CLOSE][FILE]"
+move_file       = "[MONITOR][MOVE][FILE]"
+move_dir        = "[MONITOR][MOVE][DIR]"
+skip_duplicate  = "[MONITOR][SKIP][DUPLICATE]"
+skip_exclude    = "[MONITOR][SKIP][EXCLUDE]"
+skip_size       = "[MONITOR][SKIP][SIZE_LIMIT]"
+warning_exclude = "[MONITOR][SKIP][WARNING]"
+error_dir_cache = "[MONITOR][ERROR][CACHE]"
+info            = "[MONITOR][INFO][GENERAL]"
 
-# ==================== 错误级符号 ====================
-error_dir_cache      = "[MONITOR][ERROR][CACHE]"
-error_notifier_email = "[NOTIFIER][EMAIL][ERROR]"
-error_notifier_wechat = "[NOTIFIER][WECHAT][ERROR]"
-error_notifier_webhook = "[NOTIFIER][WEBHOOK][ERROR]"
-error_scan_fail      = "[SCAN][CHAIN][ERROR]"
+# ── 扫描模块 (SCAN) ────────────────────────────────────────────────
+scan_hit        = "[SCAN][FILE][HIT]"
+scan_safe       = "[SCAN][FILE][SAFE]"
+scan_skip       = "[SCAN][SKIP][NONE]"
+scan_queue_full = "[SCAN][QUEUE][WARNING]"
+emergency_scan  = "[SCAN][EMERGENCY][INFO]"
+notice_yara_skip = "[SCAN][YARA][NOTICE]"
+error_scan      = "[SCAN][ERROR]"
+error_scan_fail = "[SCAN][CHAIN][ERROR]"
+
+# ── 隔离模块 (QUARANTINE) ──────────────────────────────────────────
+quarantine_add     = "[QUARANTINE][ADD][SUCCESS]"
+quarantine_skip    = "[QUARANTINE][SKIP][WARNING]"
+quarantine_recover = "[QUARANTINE][RECOVER][INFO]"
+quarantine_restore = "[QUARANTINE][RESTORE][SUCCESS]"
+quarantine_delete  = "[QUARANTINE][DELETE][SUCCESS]"
+
+# ── 注册表 (REGISTRY) ──────────────────────────────────────────────
+registry_add         = "[REGISTRY][ADD][SUCCESS]"
+registry_remove      = "[REGISTRY][REMOVE][SUCCESS]"
+registry_save        = "[REGISTRY][SAVE][SUCCESS]"
+notice               = "[REGISTRY][NOTICE][INFO]"
+async_saver_start    = "[REGISTRY][ASYNC][START]"
+async_saver_stop     = "[REGISTRY][ASYNC][STOP]"
+error_registry_add   = "[REGISTRY][ADD][ERROR]"
+error_registry_remove= "[REGISTRY][REMOVE][ERROR]"
 error_registry_save  = "[REGISTRY][SAVE][ERROR]"
-error_config_reload  = "[CONFIG][RELOAD][ERROR]"
-error_wal_rotate     = "[REGISTRY][WAL][ROTATE][ERROR]"
-error_wal_write      = "[REGISTRY][WAL][WRITE][ERROR]"
 error_async          = "[REGISTRY][ASYNC][ERROR]"
 error_increment      = "[REGISTRY][INCREMENT][ERROR]"
 error_mark_alerted   = "[REGISTRY][ALERT][ERROR]"
-error_registry_add   = "[REGISTRY][ADD][ERROR]"
-error_registry_remove= "[REGISTRY][REMOVE][ERROR]"
+warning_wal_fail     = "[REGISTRY][WAL][WARNING]"
+error_wal_rotate     = "[REGISTRY][WAL][ROTATE][ERROR]"
+error_wal_write      = "[REGISTRY][WAL][WRITE][ERROR]"
+error_wal_archive    = "[REGISTRY][WAL][ARCHIVE][ERROR]"
 
-# ==================== 严重级符号 ====================
-critical_alert_apt   = "[ALERT][APT][CRITICAL]"
-critical_alert_high  = "[ALERT][HIGH_FREQ][CRITICAL]"
-critical_system_start = "[SYSTEM][START][CRITICAL]"
-critical_permission  = "[SECURITY][PERM][CRITICAL]"
-critical_system_fail = "[SYSTEM][FAIL][CRITICAL]"
+# ── 日志分析 (LOG_MONITOR) ─────────────────────────────────────────
+log_monitor_start          = "[LOG_MONITOR][START][SUCCESS]"
+log_monitor_start_error    = "[LOG_MONITOR][START][ERROR]"
+log_monitor_info           = "[LOG_MONITOR][START][INFO]"
+log_monitor_stop           = "[LOG_MONITOR][STOP][INFO]"
+log_monitor_skip           = "[LOG_MONITOR][SKIP][INFO]"
+log_monitor_skip_duplicate = "[LOG_MONITOR][SKIP][DUPLICATE]"
+log_monitor_error          = "[LOG_MONITOR][ERROR][INFO]"
+log_monitor_warning        = "[LOG_MONITOR][WARNING][INFO]"
 
-# ==================== Registry操作符号 ====================
-registry_add    = "[REGISTRY][ADD][SUCCESS]"
-registry_remove = "[REGISTRY][REMOVE][SUCCESS]"
-registry_save   = "[REGISTRY][SAVE][SUCCESS]"
-notice          = "[REGISTRY][NOTICE][INFO]"
-async_saver_start = "[REGISTRY][ASYNC][START]"
-async_saver_stop = "[REGISTRY][ASYNC][STOP]"
+# ── 告警/通知 (ALERT / NOTIFIER) ───────────────────────────────────
+critical_alert_apt    = "[ALERT][APT][CRITICAL]"
+critical_alert_high   = "[ALERT][HIGH_FREQ][CRITICAL]"
+notifier_init         = "[NOTIFIER][INIT][SUCCESS]"
+error_notifier_init   = "[NOTIFIER][INIT][ERROR]"
+error_notifier_email  = "[NOTIFIER][EMAIL][ERROR]"
+error_notifier_wechat = "[NOTIFIER][WECHAT][ERROR]"
+error_notifier_webhook= "[NOTIFIER][WEBHOOK][ERROR]"
+error_notifier_queue  = "[NOTIFIER][QUEUE][ERROR]"
 
-# ==================== Notifier符号 ====================
-notifier_init = "[NOTIFIER][INIT][SUCCESS]"
+# ── 配置 (CONFIG) ──────────────────────────────────────────────────
+warning_config_reload = "[CONFIG][RELOAD][WARNING]"
+error_config_reload   = "[CONFIG][RELOAD][ERROR]"
 
-# ==================== SSE相关符号 ====================
-sse_start     = "[SSE][START][SUCCESS]"
-sse_error     = "[SSE][ERROR][FAIL]"
-sse_ready     = "[SSE][READY][INFO]"
-sse_connect   = "[SSE][CONNECT][INFO]"
-sse_disconnect = "[SSE][DISCONNECT][INFO]"
-
-# ==================== YARA规则管理符号 ====================
+# ── YARA 管理 (YARA) ───────────────────────────────────────────────
 yara_list     = "[YARA][LIST][INFO]"
 yara_upload   = "[YARA][UPLOAD][SUCCESS]"
 yara_update   = "[YARA][UPDATE][SUCCESS]"
@@ -160,34 +171,34 @@ yara_delete   = "[YARA][DELETE][SUCCESS]"
 yara_validate = "[YARA][VALIDATE][INFO]"
 yara_error    = "[YARA][ERROR][FAIL]"
 
-# ==================== 魔术头检测符号 ====================
+# ── SSE 推送 ───────────────────────────────────────────────────────
+sse_start     = "[SSE][START][SUCCESS]"
+sse_error     = "[SSE][ERROR][FAIL]"
+sse_ready     = "[SSE][READY][INFO]"
+sse_connect   = "[SSE][CONNECT][INFO]"
+sse_disconnect = "[SSE][DISCONNECT][INFO]"
+
+# ── 安全/认证 (SECURITY) ──────────────────────────────────────────
+critical_permission = "[SECURITY][PERM][CRITICAL]"
+warning_permission  = "[SECURITY][PERM][WARNING]"
 detect_php    = "[SECURITY][MAGIC][PHP]"
 detect_asp    = "[SECURITY][MAGIC][ASP]"
 detect_jsp    = "[SECURITY][MAGIC][JSP]"
 detect_error  = "[SECURITY][MAGIC][ERROR]"
 
-# ==================== DEBUG级符号（生产环境可选） ====================
+# ── 系统 (SYSTEM) ──────────────────────────────────────────────────
+system_info_start    = "[SYSTEM][INFO][START]"
+critical_system_start = "[SYSTEM][START][CRITICAL]"
+critical_system_fail  = "[SYSTEM][FAIL][CRITICAL]"
+
+# ── 调试 (DEBUG) ───────────────────────────────────────────────────
 debug_exclude = "[DEBUG][EXCLUDE][INFO]"
 debug_scan    = "[DEBUG][SCAN][INFO]"
-info          = "[MONITOR][INFO][GENERAL]"
 debug         = "[DEBUG][GENERAL][INFO]"
 
-# ==================== 新增v1.7.5符号（补全） ====================
-warning_permission = "[SECURITY][PERM][WARNING]"
-emergency_scan = "[SCAN][EMERGENCY][INFO]"
-monitor_start = "[MONITOR][START][INFO]"
-monitor_stop  = "[MONITOR][STOP][INFO]"
-error_notifier_queue = "[NOTIFIER][QUEUE][ERROR]"
-
-# ==================== v1.7.9 隔离模块 ====================
-quarantine_add     = "[QUARANTINE][ADD][SUCCESS]"
-quarantine_skip    = "[QUARANTINE][SKIP][WARNING]"
-quarantine_recover = "[QUARANTINE][RECOVER][INFO]"
-quarantine_restore = "[QUARANTINE][RESTORE][SUCCESS]"
-quarantine_delete  = "[QUARANTINE][DELETE][SUCCESS]"
-
-# ==================== v1.7.9 扫描/队列 ====================
-scan_queue_full = "[SCAN][QUEUE][WARNING]"
+# ── 通用 (GENERAL) ─────────────────────────────────────────────────
+warning = "[GENERAL][WARNING]"
+error   = "[GENERAL][ERROR]"
 
 # ============================================================================
 # v1.7.0新增：通用阈值配置
