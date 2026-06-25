@@ -387,9 +387,13 @@ function showRecordDetail() {
 function closeRecordDetail() {
   var overlay = document.getElementById('record-detail-modal-overlay');
   var modal = document.getElementById('record-detail-modal');
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) {
+    overlay.style.display = 'none';
+    overlay.classList.remove('active');
+  }
   if (modal) {
     modal.style.display = 'none';
+    modal.classList.remove('active');
     modal.innerHTML = ''; // 清空内容，下次重新加载
   }
 }

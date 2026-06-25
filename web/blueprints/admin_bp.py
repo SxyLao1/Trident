@@ -358,7 +358,8 @@ def get_records():
             _clear_memory_cache()
             current_app.logger.info("[ADMIN] 强制刷新：已清除内存缓存")
 
-        all_records = get_all(include_deleted=audit_mode, include_false_positive=audit_mode)
+        # v1.7.9: 默认展示全部检测记录（含已隔离），不再仅显示活跃文件
+        all_records = get_all(include_deleted=True, include_false_positive=audit_mode)
         total = len(all_records)
 
         # 分页计算
