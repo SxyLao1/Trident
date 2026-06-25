@@ -23,10 +23,18 @@
   </div>
 
   <div class="status-filter" style="margin-bottom: 16px;">
-    <a href="/admin/quarantine?status=all{% if compact %}&compact=1{% endif %}" class="btn btn-sm {% if current_status == 'all' %}btn-primary{% else %}btn-ghost{% endif %}">All</a>
-    <a href="/admin/quarantine?status=quarantined{% if compact %}&compact=1{% endif %}" class="btn btn-sm {% if current_status == 'quarantined' %}btn-primary{% else %}btn-ghost{% endif %}">Quarantined</a>
-    <a href="/admin/quarantine?status=restored{% if compact %}&compact=1{% endif %}" class="btn btn-sm {% if current_status == 'restored' %}btn-primary{% else %}btn-ghost{% endif %}">Restored</a>
-    <a href="/admin/quarantine?status=deleted{% if compact %}&compact=1{% endif %}" class="btn btn-sm {% if current_status == 'deleted' %}btn-primary{% else %}btn-ghost{% endif %}">Deleted</a>
+    <button class="btn btn-sm {% if current_status == 'all' %}btn-primary{% else %}btn-ghost{% endif %}"
+            hx-get="/admin/quarantine?status=all{% if compact %}&compact=1{% endif %}"
+            hx-target="#quarantine-list-container" hx-swap="outerHTML">All</button>
+    <button class="btn btn-sm {% if current_status == 'quarantined' %}btn-primary{% else %}btn-ghost{% endif %}"
+            hx-get="/admin/quarantine?status=quarantined{% if compact %}&compact=1{% endif %}"
+            hx-target="#quarantine-list-container" hx-swap="outerHTML">Quarantined</button>
+    <button class="btn btn-sm {% if current_status == 'restored' %}btn-primary{% else %}btn-ghost{% endif %}"
+            hx-get="/admin/quarantine?status=restored{% if compact %}&compact=1{% endif %}"
+            hx-target="#quarantine-list-container" hx-swap="outerHTML">Restored</button>
+    <button class="btn btn-sm {% if current_status == 'deleted' %}btn-primary{% else %}btn-ghost{% endif %}"
+            hx-get="/admin/quarantine?status=deleted{% if compact %}&compact=1{% endif %}"
+            hx-target="#quarantine-list-container" hx-swap="outerHTML">Deleted</button>
   </div>
 
   <div class="record-list">
