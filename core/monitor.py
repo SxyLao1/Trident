@@ -714,7 +714,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                 if self._should_monitor(dest_path):
                     try:
                         from core.suspicious_registry import add, mark_quarantined
-                        from core.quarantine import quarantine_file
+                        # quarantine_file already imported at top level (line 35)
                         result = self.scan_callback(dest_path, self.scan_options, self.logger)
                         if result and result.is_suspicious:
                             log_with_symbol("scan_hit", "critical",
