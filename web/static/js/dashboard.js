@@ -137,6 +137,10 @@ function closeSidebar() {
    Dashboard加载
    ============================================================ */
 function loadDashboard() {
+  // v1.7.9: 仅在Dashboard页面自动加载，避免覆盖quarantine/audit等其他页面内容
+  if (window.location.pathname !== '/admin/' && window.location.pathname !== '/admin') {
+    return;
+  }
   var contentArea = document.getElementById('main-content');
   if (!contentArea) return;
 
