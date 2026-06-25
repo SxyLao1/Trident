@@ -124,4 +124,12 @@
 .state-dot.inactive {
   background: #ffaa00;
 }
+.sys-actions { display: flex; gap: 8px; margin-top: 16px; }
 </style>
+
+<div class="sys-actions">
+    <button class="btn btn-ghost btn-sm"
+            hx-post="/admin/system/session/cleanup"
+            hx-target="closest .modal-body"
+            hx-swap="innerHTML">Cleanup Expired Sessions</button>
+</div>
