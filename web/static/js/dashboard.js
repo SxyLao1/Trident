@@ -320,6 +320,22 @@ function filterLogStream() {
   });
 }
 
+// v1.8.0: Moved from dashboard.html for consistency
+function closeRecordDetail() {
+  var overlay = document.getElementById('record-detail-modal-overlay');
+  var modal = document.getElementById('record-detail-modal');
+  if (overlay) { overlay.style.display = 'none'; overlay.classList.remove('active'); }
+  if (modal) { modal.style.display = 'none'; modal.classList.remove('active'); modal.innerHTML = ''; }
+}
+
+// ESC key closes modals
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeRecordDetail();
+    closeLogAnalyzer();
+  }
+});
+
 /* ============================================================
    刷新当前页面（Refresh按钮调用）
    ============================================================ */
