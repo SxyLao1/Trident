@@ -618,7 +618,7 @@ def mark_quarantined(file_path: str, quarantine_id: str):
                 item["file_exists"] = False
                 item["quarantine_id"] = quarantine_id
                 item["quarantined_at"] = datetime.now().isoformat()
-                _save_registry(registry)
+                _save_registry_sync(registry)  # 必须同步写入，否则会被紧跟的DELETE事件覆盖
                 log_with_symbol("quarantine_add", "info",
                                 f"Registry 已标记隔离: {Path(file_path).name} -> {quarantine_id}")
                 break
