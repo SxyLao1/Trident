@@ -1,3 +1,7 @@
+<div id="quarantine-detail-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; overflow:auto;" onclick="if(event.target===this)this.style.display='none'">
+  <div id="quarantine-detail-content" style="position:relative; margin:5% auto; max-width:800px; background:#0a0a0a; border:1px solid #00ff41; border-radius:8px; padding:24px; color:#ccc;"></div>
+</div>
+
 <div id="quarantine-list-container" class="quarantine-list" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;">
   <div class="quarantine-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px;">
     <div class="stat-card" style="background: #0a0a0a; border: 1px solid #00ff41; border-radius: 4px; padding: 16px; text-align: center;">
@@ -42,7 +46,7 @@
       <div class="record-actions" style="gap: 4px;">
         <button class="btn btn-sm btn-info"
                 hx-get="/admin/quarantine/detail?qid={{ record.quarantine_id }}"
-                hx-target="#quarantine-detail-modal"
+                hx-target="#quarantine-detail-content"
                 hx-swap="innerHTML"
                 onclick="document.getElementById('quarantine-detail-modal').style.display='block'">
           🔍 Detail
