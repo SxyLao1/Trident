@@ -116,10 +116,12 @@
           </div>
         </div>
         <div class="content-scroll" id="main-content">
+          {% block main_content %}
           <div class="empty-state">
             <div class="spinner"></div>
             <p>Initializing dashboard...</p>
           </div>
+          {% endblock %}
         </div>
       </main>
     </div>
