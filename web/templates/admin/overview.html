@@ -1,0 +1,57 @@
+<!-- v1.8.0: Overview — 安全态势首页 -->
+<div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 100%;">
+  <!-- 安全报告面板 -->
+  <div class="card" style="display: flex; flex-direction: column;">
+    <div class="card-header">
+      <span><span class="card-header-icon">◆</span> SECURITY REPORT</span>
+    </div>
+    <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto;" id="overview-stats"
+         hx-get="/admin/dashboard_content"
+         hx-trigger="load, every 10s"
+         hx-swap="innerHTML">
+      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+    </div>
+  </div>
+
+  <!-- 系统指标面板 -->
+  <div class="card" style="display: flex; flex-direction: column;">
+    <div class="card-header">
+      <span><span class="card-header-icon">◆</span> SYSTEM METRICS</span>
+      <span class="badge badge-info">Live</span>
+    </div>
+    <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto;" id="overview-metrics"
+         hx-get="/admin/metrics/data"
+         hx-trigger="load, every 10s"
+         hx-swap="innerHTML">
+      <div class="empty-state"><div class="spinner"></div><p>Loading metrics...</p></div>
+    </div>
+  </div>
+
+  <!-- 活跃威胁（未隔离） -->
+  <div class="card" style="display: flex; flex-direction: column;">
+    <div class="card-header">
+      <span><span class="card-header-icon">⚡</span> ACTIVE THREATS</span>
+      <span class="badge badge-danger">Needs Attention</span>
+    </div>
+    <div class="card-body" style="flex: 1; padding: 0; overflow: hidden;">
+      <div id="overview-active-threats" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;"
+           hx-get="/admin/records?compact=1"
+           hx-trigger="load, every 30s"
+           hx-swap="innerHTML">
+        <div class="empty-state"><div class="spinner"></div><p>Loading records...</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 实时日志流 -->
+  <div class="card" style="display: flex; flex-direction: column;">
+    <div class="card-header">
+      <span><span class="card-header-icon">◆</span> LIVE LOG STREAM</span>
+      <span class="badge badge-info">SSE</span>
+    </div>
+    <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.6;"
+         id="live-log-stream">
+      {{ log_history|safe if log_history else '<div class="empty-state"><p>Connecting to log stream...</p></div>' }}
+    </div>
+  </div>
+</div>

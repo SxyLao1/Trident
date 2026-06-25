@@ -138,7 +138,8 @@ function closeSidebar() {
    ============================================================ */
 function loadDashboard() {
   // v1.7.9: 仅在Dashboard页面自动加载，避免覆盖quarantine/audit等其他页面内容
-  if (window.location.pathname !== '/admin/' && window.location.pathname !== '/admin') {
+  // v1.8.0: Overview 是默认首页
+  if (window.location.pathname !== '/admin/' && window.location.pathname !== '/admin' && window.location.pathname !== '/admin/overview') {
     return;
   }
   var contentArea = document.getElementById('main-content');
@@ -153,7 +154,7 @@ function loadDashboard() {
   // 先显示loading
   contentArea.innerHTML = _loadingHtml;
 
-  fetch('/admin/dashboard_content', { headers: { 'HX-Request': 'true' } })
+  fetch('/admin/overview', { headers: { 'HX-Request': 'true' } })
     .then(function(r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.text();

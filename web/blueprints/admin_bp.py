@@ -130,6 +130,57 @@ def dashboard_index():
         return render_template('admin/error.html', error=str(e)), 500
 
 
+@admin_bp.route('/overview')
+@require_auth
+def overview():
+    """v1.8.0: Overview — 安全态势首页，合并Dashboard+Monitor"""
+    try:
+        auth_header = session.get('sse_token')
+        username = session.get('username', 'admin')
+        if not auth_header:
+            auth_header = generate_secure_sse_token(username)
+            session['sse_token'] = auth_header
+
+        # 加载历史日志
+        log_history_html = ""
+        try:
+            import json
+            buffer_file = normalize_path("data/sse_log_buffer.json")
+            if buffer_file.exists():
+                with open(buffer_file, 'r', encoding='utf-8') as f:
+                    buffer_data = json.load(f)
+                if isinstance(buffer_data, list):
+                    lines = buffer_data[-500:]
+                    html_parts = []
+                    for line in lines:
+                        line = line.strip()
+                        if not line or '[SSE]' in line:
+                            continue
+                        safe_line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                        html_parts.append(f'<div class="log-line">{safe_line}</div>')
+                    log_history_html = ''.join(html_parts)
+        except Exception:
+            pass
+
+        return render_template('admin/overview.html',
+            auth_header=auth_header, username=username,
+            client_ip=request.remote_addr, log_history=log_history_html)
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] overview失败: {e}", exc_info=True)
+        return render_template('admin/error.html', error=str(e)), 500
+
+
+@admin_bp.route('/threats')
+@require_auth
+def threats():
+    """v1.8.0: Threats — 检测记录+隔离管理合并视图"""
+    try:
+        return render_template('admin/threats.html')
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] threats失败: {e}", exc_info=True)
+        return render_template('admin/error.html', error=str(e)), 500
+
+
 @admin_bp.route('/dashboard_content')
 @require_auth
 def dashboard_content():
