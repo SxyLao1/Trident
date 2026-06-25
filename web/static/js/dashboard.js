@@ -288,12 +288,29 @@ function switchThreatsTab(tab) {
 function openLogAnalyzer() {
   var m = document.getElementById('log-analyzer-modal'); if (!m) return;
   m.style.display = 'flex';
+  m.style.visibility = 'visible';
+  m.style.opacity = '1';
+  m.classList.add('active');
   var s = document.getElementById('live-log-stream'), t = document.getElementById('analyzer-log-content');
   if (s && t) { t.innerHTML = s.innerHTML; t.scrollTop = t.scrollHeight; }
+  // Mirror live SSE into analyzer
+  if (!window._analyzerMirror) {
+    window._analyzerMirror = new MutationObserver(function() {
+      var src = document.getElementById('live-log-stream');
+      var dst = document.getElementById('analyzer-log-content');
+      var mod = document.getElementById('log-analyzer-modal');
+      if (src && dst && mod && mod.style.display !== 'none') {
+        dst.innerHTML = src.innerHTML; dst.scrollTop = dst.scrollHeight;
+      }
+    });
+    if (s) window._analyzerMirror.observe(s, {childList: true, subtree: true});
+  }
 }
 
 function closeLogAnalyzer() {
-  var m = document.getElementById('log-analyzer-modal'); if (m) m.style.display = 'none';
+  var m = document.getElementById('log-analyzer-modal'); if (!m) return;
+  m.style.display = 'none'; m.style.visibility = 'hidden'; m.style.opacity = '0';
+  m.classList.remove('active');
 }
 
 function filterLogAnalyzer() {
