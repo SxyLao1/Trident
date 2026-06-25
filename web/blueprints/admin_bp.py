@@ -273,7 +273,7 @@ def settings_config_editor():
 
         return render_template('admin/panels/config_editor.html',
             sections=sections, sections_levels=levels,
-            config_path=str(config_path), env_content=env_content)
+            config_path=str(config_path), env_content=env_content, os=os)
     except Exception as e:
         current_app.logger.error(f"[ADMIN] config editor failed: {e}", exc_info=True)
         return f'<div style="color:#ff4444;">Config load error: {e}</div>', 500
