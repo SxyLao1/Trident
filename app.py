@@ -57,10 +57,16 @@ def main():
         'magenta': '[35m',
         'white': '[37m',
     }
-    def _log(emoji, level, component, msg):
+    def _log(*args):
+        # v1.7.9: 兼容旧调用 _log(emoji, level, component, msg) 和新的 _log(level, component, msg)
+        if len(args) == 4:
+            _, level, component, msg = args  # strip emoji
+        else:
+            level, component, msg = args
         ts = datetime.datetime.now().strftime('%H:%M:%S')
         color = C['green'] if level == 'OK' else C['yellow'] if level == 'WARN' else C['red'] if level == 'ERR' else C['cyan']
-        print(f"{C['dim']}{ts}{C['reset']} {color}{emoji}{C['reset']} {C['bold']}[{component}]{C['reset']} {msg}")
+        label = f'[{level}]'
+        print(f"{C['dim']}{ts}{C['reset']} {color}{label}{C['reset']} {C['bold']}[{component}]{C['reset']} {msg}")
     def _sep(char='─', width=60):
         print(f"{C['dim']}{char * width}{C['reset']}")
     def _header(title):
@@ -93,7 +99,7 @@ def main():
     websites = ConfigRegistry.get_enabled_websites()
 
     if not websites:
-        _log('🛑', 'ERR', 'CONFIG', 'No enabled websites found. Exiting.')
+        _log('ERR', 'CONFIG', 'No enabled websites found. Exiting.')
         return
 
     website = websites[0]
