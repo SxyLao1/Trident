@@ -21,12 +21,10 @@ echo    ^| ^|^| '__^| ^|/ _` ^|/ _ \ '_ \^| __^|
 echo    ^| ^|^| ^|  ^| ^| (_^| ^|  __/ ^| ^| ^| ^|_
 echo    ^|_^|^|_^|  ^|_^|\__,_^|\___^|_^| ^|_^|\__^|
 echo.
-echo  Trident v1.7.8 Starting...
+echo  Trident WebShell Detection System
 echo  URL: http://127.0.0.1:8080/admin
 echo  Press Ctrl+C to stop
 echo.
 echo  Logs: logs\Trident\
-echo.
-echo  =========================================
 echo.
 python app.py

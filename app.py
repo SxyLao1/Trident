@@ -185,7 +185,7 @@ def main():
     print(f"  {C['dim']}Health:   {C['reset']}  http://{host}:{port}/api/v1/health")
     print(f"  {C['dim']}Watch:    {C['reset']}  {website.path}")
     print(f"  {C['dim']}Engines:  {C['reset']}  {', '.join(engines)}")
-    print(f"  {C['dim']}Version:  {C['reset']}  v{__version__}")
+    print(f"  {C['dim']}Version:  {C['reset']}  v{get_version()}")
     _sep('═', 60)
     print(f"{C['dim']}  Press Ctrl+C to stop{C['reset']}")
 
