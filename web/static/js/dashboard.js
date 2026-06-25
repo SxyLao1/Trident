@@ -313,6 +313,13 @@ function closeLogAnalyzer() {
   m.classList.remove('active');
 }
 
+function analyzerTimePreset() {
+  var tr = document.getElementById('analyzer-time-filter')?.value || 'all';
+  var custom = document.getElementById('analyzer-custom-time');
+  if (custom) custom.style.display = (tr === 'custom') ? '' : 'none';
+  filterLogAnalyzer();
+}
+
 function filterLogAnalyzer() {
   var kw = (document.getElementById('analyzer-filter-input')?.value || '').toLowerCase();
   var lv = document.getElementById('analyzer-level-filter')?.value || 'all';
@@ -320,12 +327,20 @@ function filterLogAnalyzer() {
   var tr = document.getElementById('analyzer-time-filter')?.value || 'all';
   var c = document.getElementById('analyzer-log-content'); if (!c) return;
 
-  // Time range
-  var now = Date.now(), minTime = 0;
+  // Time range: relative presets
+  var now = Date.now(), minTime = 0, maxTime = 0;
   if (tr === '1h') minTime = now - 3600000;
   else if (tr === '6h') minTime = now - 21600000;
   else if (tr === '24h') minTime = now - 86400000;
   else if (tr === '7d') minTime = now - 604800000;
+  else if (tr === '30d') minTime = now - 2592000000;
+  else if (tr === 'custom') {
+    // Custom absolute range
+    var fromEl = document.getElementById('analyzer-time-from');
+    var toEl = document.getElementById('analyzer-time-to');
+    if (fromEl && fromEl.value) minTime = new Date(fromEl.value).getTime();
+    if (toEl && toEl.value) maxTime = new Date(toEl.value).getTime();
+  }
 
   var v = 0;
   c.querySelectorAll('.log-line').forEach(function(el) {
@@ -338,9 +353,13 @@ function filterLogAnalyzer() {
     }
     if (md !== 'all' && tx.indexOf('[' + md + ']') < 0) s = false;
     // Time range
-    if (minTime > 0) {
+    if (minTime > 0 || maxTime > 0) {
       var m = tx.match(/\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
-      if (m) { if (new Date(m[1].replace(' ', 'T')).getTime() < minTime) s = false; }
+      if (m) {
+        var ts = new Date(m[1].replace(' ', 'T')).getTime();
+        if (minTime > 0 && ts < minTime) s = false;
+        if (maxTime > 0 && ts > maxTime) s = false;
+      }
     }
     el.style.display = s ? '' : 'none'; if (s) v++;
   });
