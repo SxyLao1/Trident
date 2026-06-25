@@ -25,7 +25,7 @@ from core.log_monitor import LogMonitor
 from utils.logger_factory import get_system_logger, get_logger, log_with_symbol  # v1.7.3修改
 from core.scanner import quick_scan_yara, get_scanner_chain
 from utils.platform_utils import check_port_reachable
-from utils.version import __version__
+from config.version import get_version, get_release_date
 # v1.7.0新增：统一Flask应用
 from web.factory import create_app, run_app
 
@@ -39,7 +39,7 @@ def load_banner() -> str:
         if banner_path.exists():
             return banner_path.read_text(encoding='utf-8')
         else:
-            return f"Trident v{__version__}"
+            return f"Trident v{get_version()}"
     except Exception as e:
         return f"Trident v{__version__} (加载banner失败: {e})"
 
@@ -87,7 +87,7 @@ def main():
     # ═══════════════════════════════════════════════════════
     print(load_banner())
     _sep('═', 60)
-    print(f"{C['bold']}{C['green']}  Trident v{__version__}  {C['reset']}{C['dim']}— WebShell Detection System{C['reset']}")
+    print(f"{C['bold']}{C['green']}  Trident v{get_version()}  {C['reset']}{C['dim']}— WebShell Detection System  |  {get_release_date()}{C['reset']}")
     print(f"{C['dim']}  Platform: {platform.system()} {platform.release()} | Python {platform.python_version()}{C['reset']}")
     _sep('═', 60)
 

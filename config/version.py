@@ -32,9 +32,9 @@ def _load_version():
         _TRIDENT_RELEASE_DATE = system.get('release_date', 'unknown')
 
     except Exception as e:
-        # 降级处理：如果读取失败，使用硬编码默认值
-        _TRIDENT_VERSION = '1.7.8'
-        _TRIDENT_RELEASE_DATE = '2026-05-27'
+        # 降级处理：如果读取失败，标记为 unknown（拒绝硬编码，提示运维检查config.toml）
+        _TRIDENT_VERSION = 'unknown'
+        _TRIDENT_RELEASE_DATE = 'unknown'
         print(f"[VERSION] Warning: Failed to load from config.toml: {e}", file=sys.stderr)
 
 def get_version():
