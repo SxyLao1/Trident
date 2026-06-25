@@ -264,16 +264,20 @@ def settings_config_editor():
             depth = sec_name.count('.')
             levels[sec_name] = depth
 
-        # Load .env content
-        env_content = ""
+        # Load .env content and parse variables
+        env_vars = {}
         env_path = os.path.join(os.path.dirname(config_path), '.env')
         if os.path.exists(env_path):
             with open(env_path, 'r', encoding='utf-8') as f:
-                env_content = f.read()
+                for line in f:
+                    line = line.strip()
+                    if '=' in line and not line.startswith('#'):
+                        k, v = line.split('=', 1)
+                        env_vars[k.strip()] = v.strip()
 
         return render_template('admin/panels/config_editor.html',
             sections=sections, sections_levels=levels,
-            config_path=str(config_path), env_content=env_content, os=os)
+            config_path=str(config_path), env_vars=env_vars, os=os)
     except Exception as e:
         current_app.logger.error(f"[ADMIN] config editor failed: {e}", exc_info=True)
         return f'<div style="color:#ff4444;">Config load error: {e}</div>', 500
@@ -397,18 +401,53 @@ def settings_config_data():
 @admin_bp.route('/settings/env/save', methods=['POST'])
 @require_auth
 def settings_env_save():
-    """v1.8.0: 保存 .env 文件"""
+    """v1.8.0: 保存 .env 文件（结构化变量）"""
     try:
         data = request.get_json()
-        content = data.get('content', '')
+        vars_data = data.get('vars', {})
         config_path = ConfigRegistry._config_path
         env_path = os.path.join(os.path.dirname(config_path), '.env')
+
+        # Read existing .env, update changed vars, write back
+        existing = {}
+        if os.path.exists(env_path):
+            with open(env_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if '=' in line and not line.startswith('#'):
+                        k, v = line.split('=', 1)
+                        existing[k.strip()] = line  # keep original line
+
+        # Merge changes
+        for k, v in vars_data.items():
+            if v:  # only write non-empty values
+                existing[k] = f'{k}={v}'
+
         with open(env_path, 'w', encoding='utf-8') as f:
-            f.write(content)
+            f.write('# Trident .env — managed via Settings UI\n')
+            for k in sorted(existing.keys()):
+                f.write(existing[k] + '\n')
+
         return jsonify({'success': True, 'message': '.env saved'})
     except Exception as e:
         current_app.logger.error(f"[ADMIN] env save failed: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@admin_bp.route('/settings/env/hash', methods=['POST'])
+@require_auth
+def settings_env_hash():
+    """v1.8.0: 生成 scrypt 密码哈希"""
+    try:
+        data = request.get_json()
+        password = data.get('password', '')
+        if not password or len(password) < 6:
+            return jsonify({'error': 'Password too short (min 6 chars)'}), 400
+        from werkzeug.security import generate_password_hash
+        h = generate_password_hash(password, method='scrypt:32768:8:1')
+        return jsonify({'hash': h})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @admin_bp.route('/settings/notifications/save', methods=['POST'])

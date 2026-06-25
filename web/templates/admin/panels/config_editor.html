@@ -1,7 +1,9 @@
-<!-- v1.8.0: Hierarchical config editor with tree view + .env section -->
-<div style="display:flex; flex-direction:column; gap:16px;">
+<!-- v1.8.0: Hierarchical config editor v3 -->
+<div style="display:flex; flex-direction:column; gap:12px;">
+  <!-- Toolbar -->
   <div style="display:flex; align-items:center; gap:12px;">
-    <span style="color:#888; font-size:12px;"><code style="color:#ccc;">{{ config_path }}</code></span>
+    <input type="text" class="form-input" placeholder="Search config..." style="flex:1; max-width:300px; font-size:11px; padding:4px 8px;"
+           oninput="searchConfig(this.value)">
     <span style="flex:1;"></span>
     <span id="config-saved" style="color:#00ff41; font-size:12px; display:none;">Saved</span>
     <button class="btn btn-primary btn-sm" onclick="saveConfig()">Save config.toml</button>
@@ -10,21 +12,21 @@
   <!-- Tree -->
   <div id="config-tree" style="font-family:var(--font-mono); font-size:12px; background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:8px 0;">
     {% macro render_section(sec_name, fields, level) %}
-    {% set indent = level * 20 %}
-    <div class="cfg-section" data-section="{{ sec_name }}">
+    {% set indent = level * 18 %}
+    <div class="cfg-section collapsed" data-section="{{ sec_name }}">
       <div class="cfg-section-hdr" onclick="toggleCfgSection(this)" style="padding:4px 12px; padding-left:{{ 12 + indent }}px; cursor:pointer; display:flex; align-items:center; gap:8px;">
-        <span class="cfg-arrow" style="font-size:10px; color:#666; width:12px;">▼</span>
+        <span class="cfg-arrow" style="font-size:10px; color:#666; width:12px; display:inline-block; transform:rotate(-90deg);">▼</span>
         <span style="color:#00ff41; font-weight:bold;">[{{ sec_name }}]</span>
         <span style="color:#555; font-size:10px;">{{ fields|length }} fields</span>
       </div>
-      <div class="cfg-section-body">
+      <div class="cfg-section-body" style="display:none;">
         {% for f in fields %}
-        <div class="cfg-field" style="padding:3px 12px; padding-left:{{ 36 + indent }}px; display:flex; align-items:center; gap:8px;">
+        <div class="cfg-field" data-field="{{ sec_name }}.{{ f.key }}" style="padding:3px 12px; padding-left:{{ 36 + indent }}px; display:flex; align-items:center; gap:8px;">
           <span style="color:#ccc; min-width:160px;">{{ f.key }}</span>
           {% if f.desc %}
           <span class="cfg-info" data-tooltip="{{ f.desc }}">i</span>
           {% else %}
-          <span style="width:15px;"></span>
+          <span style="width:14px;"></span>
           {% endif %}
           {% if f.is_env %}
           <input type="text" value="{{ f.display }}" data-key="{{ sec_name }}.{{ f.key }}" disabled
@@ -51,17 +53,51 @@
     {% endfor %}
   </div>
 
-  <!-- .env Editor -->
-  <div class="config-section">
-    <div class="config-section-header" onclick="var b=this.nextElementSibling;b.style.display=b.style.display==='none'?'':'none'">
-      <h4>.env File</h4><span style="color:#666; font-size:10px;">sensitive credentials</span>
+  <!-- .env Editor (structured) -->
+  <div class="config-section collapsed">
+    <div class="config-section-header" onclick="var s=this.parentElement;s.classList.toggle('collapsed');var b=this.nextElementSibling;b.style.display=b.style.display==='none'?'':'none'" style="display:flex;align-items:center;padding:8px 14px;cursor:pointer;border-bottom:1px solid #1a1a1a;background:#0a0a0a;border-radius:4px 4px 0 0;">
+      <span class="cfg-arrow" style="font-size:10px; color:#666; width:12px; display:inline-block; transform:rotate(-90deg);">▼</span>
+      <h4 style="color:#00ff41; margin:0; font-size:13px; flex:1;">.env File</h4>
+      <span style="color:#666; font-size:10px;">sensitive credentials</span>
     </div>
-    <div class="config-section-body" style="display:none;">
-      <textarea id="env-editor" style="width:100%; height:180px; background:#000; color:#ccc; border:1px solid #333; padding:10px; font-size:11px; font-family:var(--font-mono); border-radius:3px; resize:vertical;">{{ env_content }}</textarea>
-      <div style="margin-top:8px; display:flex; gap:8px;">
-        <button class="btn btn-primary btn-sm" onclick="saveEnv()">Save .env</button>
+    <div class="config-section-body" style="display:none; padding:14px; background:#0a0a0a; border:1px solid #1a1a1a; border-top:none; border-radius:0 0 4px 4px; display:flex; flex-direction:column; gap:14px;">
+
+      <!-- Password Hash row -->
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_PASSWORD_HASH</span>
+        <code id="env-pwd-display" style="flex:1; background:#000; color:#888; padding:4px 8px; font-size:10px; border-radius:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:500px;">{{ env_vars.get('TRIDENT_PASSWORD_HASH', 'Not set')[:60] }}...</code>
+        <input type="text" id="env-pwd-input" placeholder="New password" style="width:160px; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
+        <button class="btn btn-ghost btn-sm" onclick="generatePwdHash()" style="white-space:nowrap;">Generate Hash</button>
+      </div>
+
+      <!-- Server酱 key -->
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_WECHAT_API_KEY</span>
+        <input type="text" id="env-wechat-key" value="{{ env_vars.get('TRIDENT_WECHAT_API_KEY', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
+        <a href="https://sct.ftqq.com/" target="_blank" style="color:#00ff41; font-size:10px; white-space:nowrap; text-decoration:none;">Get Key</a>
+      </div>
+
+      <!-- Email fields -->
+      {% for var in ['TRIDENT_EMAIL_USERNAME', 'TRIDENT_EMAIL_PASSWORD', 'TRIDENT_EMAIL_FROM', 'TRIDENT_EMAIL_TO'] %}
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span style="color:#ccc; font-size:11px; min-width:150px;">{{ var }}</span>
+        <input type="{{ 'password' if 'PASSWORD' in var else 'text' }}" id="env-{{ var }}" value="{{ env_vars.get(var, '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
+        {% if 'PASSWORD' in var %}
+        <span style="color:#666; font-size:10px; white-space:nowrap;">SMTP auth code</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+      <!-- Webhook -->
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_WEBHOOK_SECRET</span>
+        <input type="text" id="env-webhook" value="{{ env_vars.get('TRIDENT_WEBHOOK_SECRET', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
+      </div>
+
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-primary btn-sm" onclick="saveEnvVars()">Save .env</button>
         <span id="env-saved" style="color:#00ff41; font-size:12px; display:none;">Saved</span>
-        <span style="color:#888; font-size:11px;">Credentials stored in .env are never committed to git.</span>
+        <span style="color:#888; font-size:10px;">Credentials never committed to git.</span>
       </div>
     </div>
   </div>
@@ -70,16 +106,34 @@
 <style>
 .cfg-section-hdr:hover { background:#0d0d0d; }
 .cfg-section.collapsed .cfg-section-body { display:none; }
-.cfg-section.collapsed .cfg-arrow { transform:rotate(-90deg); display:inline-block; }
+.cfg-section:not(.collapsed) .cfg-section-body { display:block; }
+.cfg-section:not(.collapsed) .cfg-arrow { transform:rotate(0deg); display:inline-block; }
 .cfg-info { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; border:1px solid #555; color:#555; font-size:9px; font-weight:bold; cursor:help; position:relative; flex-shrink:0; }
 .cfg-info:hover { border-color:#00ff41; color:#00ff41; }
 .cfg-info:hover::after { content:attr(data-tooltip); position:absolute; bottom:120%; left:50%; transform:translateX(-50%); background:#1a1a1a; color:#ccc; border:1px solid #00ff41; padding:4px 8px; font-size:10px; font-weight:normal; white-space:nowrap; border-radius:3px; z-index:10; pointer-events:none; }
+.cfg-highlight { background:#0a1a0a; }
 </style>
 
 <script>
 function toggleCfgSection(hdr) {
   var sec = hdr.parentElement;
   sec.classList.toggle('collapsed');
+}
+
+function searchConfig(query) {
+  var q = query.toLowerCase();
+  document.querySelectorAll('.cfg-section').forEach(function(sec) {
+    var text = (sec.dataset.section || '') + ' ' + sec.innerText;
+    if (!q) { sec.classList.add('collapsed'); return; }
+    if (text.toLowerCase().indexOf(q) >= 0) {
+      sec.classList.remove('collapsed');
+      sec.querySelectorAll('.cfg-field').forEach(function(f) {
+        f.classList.toggle('cfg-highlight', f.dataset.field && f.dataset.field.toLowerCase().indexOf(q) >= 0);
+      });
+    } else {
+      sec.classList.add('collapsed');
+    }
+  });
 }
 
 function markDirty() {
@@ -108,12 +162,35 @@ function saveConfig() {
   });
 }
 
-function saveEnv() {
-  var content = document.getElementById('env-editor').value;
+function generatePwdHash() {
+  var pwd = document.getElementById('env-pwd-input').value;
+  if (!pwd) { alert('Enter a password first'); return; }
+  fetch('/admin/settings/env/hash', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
+    body: JSON.stringify({password: pwd})
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.hash) {
+      document.getElementById('env-pwd-input').value = '';
+      document.getElementById('env-pwd-display').textContent = data.hash.substring(0, 60) + '...';
+    }
+  });
+}
+
+function saveEnvVars() {
+  var vars = {};
+  // Collect all env inputs
+  ['TRIDENT_PASSWORD_HASH', 'TRIDENT_WECHAT_API_KEY',
+   'TRIDENT_EMAIL_USERNAME', 'TRIDENT_EMAIL_PASSWORD', 'TRIDENT_EMAIL_FROM', 'TRIDENT_EMAIL_TO',
+   'TRIDENT_WEBHOOK_SECRET', 'TRIDENT_SECRET_KEY'].forEach(function(k) {
+    var el = document.getElementById('env-' + k);
+    if (el) vars[k] = el.value;
+  });
+
   fetch('/admin/settings/env/save', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
-    body: JSON.stringify({content: content})
+    body: JSON.stringify({vars: vars})
   }).then(function(r) { return r.json(); }).then(function(data) {
     var el = document.getElementById('env-saved');
     if (data.success) { if (el) { el.style.display = ''; el.textContent = 'Saved'; } }
