@@ -200,7 +200,7 @@ function loadContent(path, title) {
   var pageTitle = document.getElementById('page-title');
   if (pageTitle) pageTitle.textContent = _currentTitle;
 
-  // 清空 header toolbar（避免上一个页面的 toolbar 残留）
+  // v1.8.0: header-center 留给未来多站点选择器，页面工具栏留在各自内容区
   var headerCenter = document.getElementById('header-center');
   if (headerCenter) headerCenter.innerHTML = '';
 
@@ -219,14 +219,6 @@ function loadContent(path, title) {
         console.error('[Dashboard] Nested page detected, redirecting...');
         window.location.href = '/admin/dashboard';
         return;
-      }
-
-      // 提取 toolbar（如果有的话）
-      var toolbarMatch = html.match(/<div class="page-toolbar"[^>]*>([\s\S]*?)<\/div>/);
-      if (toolbarMatch && headerCenter) {
-        headerCenter.innerHTML = toolbarMatch[1];
-        // 从内容中移除 toolbar HTML（避免重复渲染）
-        html = html.replace(toolbarMatch[0], '');
       }
 
       contentArea.innerHTML = html;
