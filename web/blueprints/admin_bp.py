@@ -181,6 +181,77 @@ def threats():
         return render_template('admin/error.html', error=str(e)), 500
 
 
+@admin_bp.route('/settings')
+@require_auth
+def settings_page():
+    """v1.8.0: Settings — 系统+账户+通知配置合并视图"""
+    try:
+        return render_template('admin/settings.html')
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] settings失败: {e}", exc_info=True)
+        return render_template('admin/error.html', error=str(e)), 500
+
+
+@admin_bp.route('/settings/notifications')
+@require_auth
+def settings_notifications():
+    """v1.8.0: Web Config Panel — 通知配置表单"""
+    try:
+        from config.loader import load_config
+        cfg = load_config()
+        notifier = cfg.get('notifier', {})
+        email = notifier.get('email', {})
+        wechat = notifier.get('wechat', {})
+        webhook = notifier.get('webhook', {})
+        return render_template('admin/panels/notify_config.html',
+            email=email, wechat=wechat, webhook=webhook)
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] settings/notifications失败: {e}", exc_info=True)
+        return f'<div style="color:#ff4444;">加载失败: {e}</div>', 500
+
+
+@admin_bp.route('/settings/notifications/save', methods=['POST'])
+@require_auth
+def settings_notifications_save():
+    """v1.8.0: 保存通知开关状态到 config.toml"""
+    try:
+        section = request.form.get('section', '')
+        key = request.form.get('key', '')
+        value = request.form.get('value', 'on')  # checkbox sends 'on' when checked
+
+        if section not in ('email', 'wechat', 'webhook') or key not in ('enabled',):
+            return jsonify({"error": "Invalid parameters"}), 400
+
+        # Read config.toml, update, write back
+        config_path = ConfigRegistry._config_path
+        with open(config_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        in_target_section = False
+        section_header = f'[notifier.{section}]'
+        for i, line in enumerate(lines):
+            if line.strip() == section_header:
+                in_target_section = True
+                continue
+            if in_target_section:
+                if line.strip().startswith('['):
+                    break  # next section, stop
+                if line.strip().startswith(f'{key} =') or line.strip().startswith(f'{key}='):
+                    # Toggle: if 'on', set to true; if not present, set to false
+                    # Checkbox: unchecked means the field is not sent
+                    new_val = 'true' if value == 'on' else 'false'
+                    lines[i] = f'{key} = {new_val}\n'
+                    break
+
+        with open(config_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+        return jsonify({"success": True, "message": f"{section}.{key} updated"})
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] settings save failed: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_bp.route('/dashboard_content')
 @require_auth
 def dashboard_content():

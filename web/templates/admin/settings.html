@@ -1,0 +1,50 @@
+<!-- v1.8.0: Settings — 系统 + 账户 + Web 配置面板 -->
+<div style="padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+  <!-- Account -->
+  <div class="card">
+    <div class="card-header"><span><span class="card-header-icon">◆</span> ACCOUNT</span></div>
+    <div class="card-body" style="padding: 16px;"
+         hx-get="/admin/account"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+    </div>
+  </div>
+
+  <!-- System -->
+  <div class="card">
+    <div class="card-header"><span><span class="card-header-icon">◆</span> SYSTEM</span></div>
+    <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+      <button class="btn btn-ghost btn-sm" style="text-align: left;"
+              hx-get="/admin/system/registry_panel" hx-target="#settings-system-content" hx-swap="innerHTML">
+        Registry Status
+      </button>
+      <button class="btn btn-ghost btn-sm" style="text-align: left;"
+              hx-get="/admin/system/wal_panel" hx-target="#settings-system-content" hx-swap="innerHTML">
+        WAL Management
+      </button>
+      <button class="btn btn-ghost btn-sm" style="text-align: left;"
+              hx-get="/admin/system/session_panel" hx-target="#settings-system-content" hx-swap="innerHTML">
+        Session Management
+      </button>
+      <button class="btn btn-ghost btn-sm" style="text-align: left;"
+              hx-get="/admin/system/config_panel" hx-target="#settings-system-content" hx-swap="innerHTML">
+        Config Reload
+      </button>
+      <div id="settings-system-content" style="margin-top: 8px; font-size: 12px; color: #888;">
+        Select an option to view details
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Config (Web Config Panel) -->
+  <div class="card" style="grid-column: 1 / -1;">
+    <div class="card-header"><span><span class="card-header-icon">◆</span> NOTIFICATIONS</span></div>
+    <div class="card-body" style="padding: 16px;" id="settings-notify"
+         hx-get="/admin/settings/notifications"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+      <div class="empty-state"><div class="spinner"></div><p>Loading notification settings...</p></div>
+    </div>
+  </div>
+</div>
