@@ -241,6 +241,67 @@ function loadContent(path, title) {
 }
 
 /* ============================================================
+   v1.8.0: Shared functions (Threats tabs + Log Analyzer)
+   Defined here because HTMX innerHTML does not execute <script> tags
+   ============================================================ */
+
+var _threatsTabsLoaded = {active: true, quarantine: false, audit: false};
+
+function switchThreatsTab(tab) {
+  document.querySelectorAll('.threats-tab').forEach(function(t) {
+    t.style.color = '#666'; t.style.borderBottomColor = 'transparent'; t.classList.remove('active');
+  });
+  var at = document.querySelector('.threats-tab[data-tab="' + tab + '"]');
+  if (at) { at.style.color = '#00ff41'; at.style.borderBottomColor = '#00ff41'; at.classList.add('active'); }
+  document.querySelectorAll('.threats-tab-content').forEach(function(c) { c.style.display = 'none'; });
+  var ct = document.getElementById('threats-tab-' + tab);
+  if (ct) {
+    ct.style.display = 'flex';
+    if (!_threatsTabsLoaded[tab]) {
+      _threatsTabsLoaded[tab] = true;
+      var urls = { quarantine: '/admin/quarantine?status=quarantined', audit: '/admin/records?audit=true&compact=1' };
+      var targets = { quarantine: '#threats-quarantine-container', audit: '#threats-audit-container' };
+      if (urls[tab] && window.htmx) htmx.ajax('GET', urls[tab], {target: targets[tab], swap: 'innerHTML'});
+    }
+  }
+}
+
+function openLogAnalyzer() {
+  var m = document.getElementById('log-analyzer-modal'); if (!m) return;
+  m.style.display = 'flex';
+  var s = document.getElementById('live-log-stream'), t = document.getElementById('analyzer-log-content');
+  if (s && t) { t.innerHTML = s.innerHTML; t.scrollTop = t.scrollHeight; }
+}
+
+function closeLogAnalyzer() {
+  var m = document.getElementById('log-analyzer-modal'); if (m) m.style.display = 'none';
+}
+
+function filterLogAnalyzer() {
+  var kw = (document.getElementById('analyzer-filter-input')?.value || '').toLowerCase();
+  var lv = document.getElementById('analyzer-level-filter')?.value || 'all';
+  var md = document.getElementById('analyzer-module-filter')?.value || 'all';
+  var c = document.getElementById('analyzer-log-content'); if (!c) return;
+  var v = 0;
+  c.querySelectorAll('.log-line').forEach(function(el) {
+    var tx = el.textContent; var s = true;
+    if (kw && tx.toLowerCase().indexOf(kw) < 0) s = false;
+    if (lv !== 'all' && tx.toUpperCase().indexOf('[' + lv + ']') < 0) s = false;
+    if (md !== 'all' && tx.indexOf('[' + md + ']') < 0) s = false;
+    el.style.display = s ? '' : 'none'; if (s) v++;
+  });
+  var ce = document.getElementById('analyzer-count'); if (ce) ce.textContent = v + ' lines';
+}
+
+function filterLogStream() {
+  var kw = (document.getElementById('log-filter-input')?.value || '').toLowerCase();
+  var c = document.getElementById('live-log-stream'); if (!c) return;
+  c.querySelectorAll('.log-line').forEach(function(el) {
+    el.style.display = (kw && el.textContent.toLowerCase().indexOf(kw) < 0) ? 'none' : '';
+  });
+}
+
+/* ============================================================
    刷新当前页面（Refresh按钮调用）
    ============================================================ */
 function refreshCurrent() {

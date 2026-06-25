@@ -141,10 +141,11 @@ def overview():
             auth_header = generate_secure_sse_token(username)
             session['sse_token'] = auth_header
 
-        # 加载历史日志
+        # 加载历史日志（优先 SSE buffer，fallback 到 monitor.log）
         log_history_html = ""
         try:
             import json
+            # 1. 优先从 SSE 日志缓冲区读取
             buffer_file = normalize_path("data/sse_log_buffer.json")
             if buffer_file.exists():
                 with open(buffer_file, 'r', encoding='utf-8') as f:
@@ -159,6 +160,22 @@ def overview():
                         safe_line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
                         html_parts.append(f'<div class="log-line">{safe_line}</div>')
                     log_history_html = ''.join(html_parts)
+
+            # 2. Fallback：如果缓冲区为空，从 monitor.log 读取最近500行
+            if not log_history_html:
+                log_file = normalize_path("logs/Website-PhpStudy/monitor.log")
+                if log_file.exists():
+                    with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                        all_lines = f.readlines()
+                        lines = all_lines[-500:]
+                        html_parts = []
+                        for line in lines:
+                            line = line.strip()
+                            if not line or '[SSE]' in line:
+                                continue
+                            safe_line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                            html_parts.append(f'<div class="log-line">{safe_line}</div>')
+                        log_history_html = ''.join(html_parts)
         except Exception:
             pass
 
