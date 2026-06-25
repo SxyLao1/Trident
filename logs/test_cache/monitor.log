@@ -1,0 +1,3 @@
+[2026-06-25 20:14:43,716] INFO - [SCAN][WORKER] 异步扫描工作线程已启动
+[2026-06-25 20:14:43,716] INFO - [MONITOR][START][SUCCESS] 初始化成功
+[2026-06-25 20:14:43,716] DEBUG - [MONITOR][START][SUCCESS] 处理器初始化完成 | 平台: windows | 验证延迟: 50ms | 缓存策略: TTL-60.0s无限制

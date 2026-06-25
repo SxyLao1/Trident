@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Trident Tools Syourusername Test
+Trident Tools Syntax Test
 验证所有 tools/*.py 都能正常 import（不执行功能）
 """
 import os
@@ -13,7 +13,7 @@ sys.path.insert(0, PROJECT_ROOT)
 TOOLS_DIR = os.path.join(PROJECT_ROOT, "tools")
 
 # Tools that require runtime environment (skip syourusername test)
-SKIP_Syourusername = {"generate_demo_data.py", "ci_quick_validator.py"}
+SKIP_Syntax = {"generate_demo_data.py", "ci_quick_validator.py"}
 
 
 def main():
@@ -26,7 +26,7 @@ def main():
     failed_details = []
 
     for tool in sorted(tools):
-        if tool in SKIP_Syourusername:
+        if tool in SKIP_Syntax:
             print(f"  [SKIP] {tool:<35} skipped (requires runtime)")
             continue
 

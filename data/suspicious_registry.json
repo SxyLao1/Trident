@@ -1,0 +1,38 @@
+[
+  {
+    "file_path": "f:\\home\\github\\trident\\trident_v1.0\\trident_1.7\\trident_1.7.9\\temp\\alert_flow_test.php",
+    "detected_at": "2026-06-25T20:14:58.443162",
+    "features": [
+      "alert_test"
+    ],
+    "alerted": false,
+    "file_exists": true,
+    "first_seen_ip": "192.168.1.100",
+    "communication_count": 1,
+    "deleted_at": null
+  },
+  {
+    "file_path": "c:\\users\\14183\\appdata\\local\\temp\\tmppr9ul6qu\\shell.php",
+    "detected_at": "2026-06-25T20:14:58.771052",
+    "features": [
+      "log_test"
+    ],
+    "alerted": false,
+    "file_exists": true,
+    "first_seen_ip": null,
+    "communication_count": 0,
+    "deleted_at": null
+  },
+  {
+    "file_path": "f:\\home\\github\\trident\\trident_v1.0\\trident_1.7\\trident_1.7.9\\temp\\integration_test\\reg_monitor_test.php",
+    "detected_at": "2026-06-25T20:14:58.937037",
+    "features": [
+      "integration_test"
+    ],
+    "alerted": false,
+    "file_exists": false,
+    "first_seen_ip": null,
+    "communication_count": 0,
+    "deleted_at": "2026-06-25T20:14:59.305865"
+  }
+]
