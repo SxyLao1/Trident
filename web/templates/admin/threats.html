@@ -71,12 +71,19 @@ function switchThreatsTab(tab) {
   var content = document.getElementById('threats-tab-' + tab);
   if (content) {
     content.style.display = 'flex';
-    // Lazy load: trigger HTMX on first visit
+    // Lazy load on first visit
     if (!_threatsTabsLoaded[tab]) {
       _threatsTabsLoaded[tab] = true;
-      var container = document.getElementById('threats-' + tab + '-container');
-      if (container && window.htmx) {
-        htmx.trigger(container, 'load');
+      var urls = {
+        quarantine: '/admin/quarantine?status=quarantined',
+        audit: '/admin/records?audit=true&compact=1'
+      };
+      var targets = {
+        quarantine: '#threats-quarantine-container',
+        audit: '#threats-audit-container'
+      };
+      if (urls[tab] && window.htmx) {
+        htmx.ajax('GET', urls[tab], {target: targets[tab], swap: 'innerHTML'});
       }
     }
   }

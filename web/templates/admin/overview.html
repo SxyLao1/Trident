@@ -45,36 +45,13 @@
 
   <!-- 实时日志流 -->
   <div class="card" style="display: flex; flex-direction: column;">
-    <div class="card-header">
-      <span><span class="card-header-icon">◆</span> LIVE LOG STREAM</span>
+    <div class="card-header" style="display: flex; align-items: center; gap: 8px;">
+      <span style="flex: 1;"><span class="card-header-icon">◆</span> LIVE LOG STREAM</span>
+      <input type="text" class="form-input" style="width: 140px; font-size: 10px; padding: 3px 6px;"
+             placeholder="Quick filter..." oninput="filterLogStream()" id="log-filter-input">
       <span class="badge badge-info">SSE</span>
-    </div>
-    <!-- v1.8.0: Log filter bar -->
-    <div style="display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #1a1a1a; align-items: center; flex-wrap: wrap;">
-      <input type="text" class="form-input" style="flex: 1; min-width: 120px; max-width: 250px; font-size: 11px; padding: 4px 8px;"
-             placeholder="Filter logs..." oninput="filterLogStream()" id="log-filter-input">
-      <select id="log-level-filter" onchange="filterLogStream()"
-              style="background: #0a0a0a; color: #ccc; border: 1px solid #333; padding: 4px 8px; font-size: 11px; font-family: var(--font-mono); border-radius: 3px;">
-        <option value="all">All Levels</option>
-        <option value="INFO">INFO</option>
-        <option value="WARNING">WARNING</option>
-        <option value="ERROR">ERROR</option>
-        <option value="CRITICAL">CRITICAL</option>
-      </select>
-      <select id="log-module-filter" onchange="filterLogStream()"
-              style="background: #0a0a0a; color: #ccc; border: 1px solid #333; padding: 4px 8px; font-size: 11px; font-family: var(--font-mono); border-radius: 3px;">
-        <option value="all">All Modules</option>
-        <option value="MONITOR">MONITOR</option>
-        <option value="SCAN">SCAN</option>
-        <option value="QUARANTINE">QUARANTINE</option>
-        <option value="REGISTRY">REGISTRY</option>
-        <option value="NOTIFIER">NOTIFIER</option>
-        <option value="SECURITY">SECURITY</option>
-        <option value="CONFIG">CONFIG</option>
-        <option value="ALERT">ALERT</option>
-        <option value="SSE">SSE</option>
-      </select>
-      <span style="font-size: 10px; color: #666;" id="log-visible-count">0 lines</span>
+      <button class="btn btn-ghost btn-sm" style="font-size: 10px; padding: 3px 8px;"
+              onclick="openLogAnalyzer()">Analyze</button>
     </div>
     <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.6;"
          id="live-log-stream">
@@ -82,68 +59,104 @@
     </div>
   </div>
 
-<script>
-// v1.8.0: Client-side log filtering
-var _logLines = [];
-var _logMaxVisible = 500;
+<!-- v1.8.0: Log Analyzer Modal -->
+<div id="log-analyzer-modal" class="modal-overlay" style="display:none; z-index:2000;" onclick="if(event.target===this)closeLogAnalyzer()">
+  <div class="modal-container" style="width:95vw; height:90vh; max-width:1400px; display:flex; flex-direction:column;">
+    <div class="modal-header" style="display:flex; align-items:center; padding:12px 20px; border-bottom:1px solid #1a1a1a;">
+      <h3 style="color:#00ff41; margin:0; flex:1;">Log Analyzer</h3>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input type="text" class="form-input" style="width:200px; font-size:11px; padding:4px 8px;"
+               placeholder="Search keyword..." oninput="filterLogAnalyzer()" id="analyzer-filter-input">
+        <select id="analyzer-level-filter" onchange="filterLogAnalyzer()"
+                style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
+          <option value="all">All</option>
+          <option value="INFO">INFO</option>
+          <option value="WARNING">WARNING</option>
+          <option value="ERROR">ERROR</option>
+          <option value="CRITICAL">CRITICAL</option>
+        </select>
+        <select id="analyzer-module-filter" onchange="filterLogAnalyzer()"
+                style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
+          <option value="all">All</option>
+          <option value="MONITOR">MONITOR</option>
+          <option value="SCAN">SCAN</option>
+          <option value="QUARANTINE">QUARANTINE</option>
+          <option value="REGISTRY">REGISTRY</option>
+          <option value="NOTIFIER">NOTIFIER</option>
+          <option value="SECURITY">SECURITY</option>
+          <option value="ALERT">ALERT</option>
+        </select>
+        <span style="font-size:10px; color:#666;" id="analyzer-count">0 lines</span>
+        <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="closeLogAnalyzer()">Close</button>
+      </div>
+    </div>
+    <div class="modal-body" style="flex:1; padding:16px; overflow-y:auto; font-family:var(--font-mono); font-size:12px; line-height:1.7;"
+         id="analyzer-log-content">
+      <div class="empty-state"><p>Loading logs...</p></div>
+    </div>
+  </div>
+</div>
 
+<script>
+// v1.8.0: Log filtering (lightweight, for quadrant view)
 function filterLogStream() {
   var keyword = (document.getElementById('log-filter-input')?.value || '').toLowerCase();
-  var level = document.getElementById('log-level-filter')?.value || 'all';
-  var module = document.getElementById('log-module-filter')?.value || 'all';
   var container = document.getElementById('live-log-stream');
   if (!container) return;
-
-  // Collect all current log lines
-  var allLines = container.querySelectorAll('.log-line');
-  if (allLines.length > 0 && _logLines.length === 0) {
-    allLines.forEach(function(el) { _logLines.push({el: el, text: el.textContent}); });
-  }
-
-  var visible = 0;
-  _logLines.forEach(function(item) {
-    var text = item.text;
-    var show = true;
-    if (keyword && text.toLowerCase().indexOf(keyword) < 0) show = false;
-    if (level !== 'all' && text.indexOf('[' + level + ']') < 0 && text.toUpperCase().indexOf(level) < 0) show = false;
-    if (module !== 'all' && text.indexOf('[' + module + ']') < 0) show = false;
-    item.el.style.display = show ? '' : 'none';
-    if (show) visible++;
+  container.querySelectorAll('.log-line').forEach(function(el) {
+    el.style.display = (keyword && el.textContent.toLowerCase().indexOf(keyword) < 0) ? 'none' : '';
   });
+}
 
-  var countEl = document.getElementById('log-visible-count');
-  if (countEl) countEl.textContent = visible + ' lines';
-
-  // Cap visible entries for performance
-  if (visible > _logMaxVisible) {
-    var shown = 0;
-    _logLines.forEach(function(item) {
-      if (item.el.style.display !== 'none') {
-        shown++;
-        if (shown > _logMaxVisible) item.el.style.display = 'none';
+// v1.8.0: Full-screen log analyzer
+function openLogAnalyzer() {
+  var modal = document.getElementById('log-analyzer-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  // Clone current log lines + live SSE into analyzer
+  var source = document.getElementById('live-log-stream');
+  var target = document.getElementById('analyzer-log-content');
+  if (source && target) {
+    target.innerHTML = source.innerHTML;
+    target.scrollTop = target.scrollHeight;
+  }
+  // Start mirroring SSE to analyzer
+  if (!window._analyzerObserver) {
+    window._analyzerObserver = new MutationObserver(function() {
+      var s = document.getElementById('live-log-stream');
+      var t = document.getElementById('analyzer-log-content');
+      if (s && t && document.getElementById('log-analyzer-modal').style.display !== 'none') {
+        t.innerHTML = s.innerHTML;
+        t.scrollTop = t.scrollHeight;
       }
     });
-    if (countEl) countEl.textContent = _logMaxVisible + ' / ' + visible + ' lines (capped)';
+    if (source) window._analyzerObserver.observe(source, { childList: true, subtree: true });
   }
 }
 
-// Intercept new SSE log lines to apply current filter
-var _origLogObserver = new MutationObserver(function(mutations) {
-  mutations.forEach(function(m) {
-    m.addedNodes.forEach(function(node) {
-      if (node.classList && node.classList.contains('log-line')) {
-        _logLines.push({el: node, text: node.textContent});
-        if (_logLines.length > 1000) _logLines.shift();  // memory cap
-        // Apply current filter to new line
-        var keyword = (document.getElementById('log-filter-input')?.value || '').toLowerCase();
-        var level = document.getElementById('log-level-filter')?.value || 'all';
-        if (keyword && node.textContent.toLowerCase().indexOf(keyword) < 0) node.style.display = 'none';
-        if (level !== 'all' && node.textContent.indexOf('[' + level + ']') < 0) node.style.display = 'none';
-      }
-    });
+function closeLogAnalyzer() {
+  var modal = document.getElementById('log-analyzer-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function filterLogAnalyzer() {
+  var keyword = (document.getElementById('analyzer-filter-input')?.value || '').toLowerCase();
+  var level = document.getElementById('analyzer-level-filter')?.value || 'all';
+  var module = document.getElementById('analyzer-module-filter')?.value || 'all';
+  var container = document.getElementById('analyzer-log-content');
+  if (!container) return;
+  var visible = 0;
+  container.querySelectorAll('.log-line').forEach(function(el) {
+    var text = el.textContent;
+    var show = true;
+    if (keyword && text.toLowerCase().indexOf(keyword) < 0) show = false;
+    if (level !== 'all' && text.toUpperCase().indexOf('[' + level + ']') < 0) show = false;
+    if (module !== 'all' && text.indexOf('[' + module + ']') < 0) show = false;
+    el.style.display = show ? '' : 'none';
+    if (show) visible++;
   });
-});
-var logContainer = document.getElementById('live-log-stream');
-if (logContainer) _origLogObserver.observe(logContainer, { childList: true });
+  var countEl = document.getElementById('analyzer-count');
+  if (countEl) countEl.textContent = visible + ' lines';
+}
 </script>
 </div>
