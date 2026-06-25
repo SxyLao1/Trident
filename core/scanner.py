@@ -418,10 +418,8 @@ def quick_scan_yara(file_path: Path, scan_options: ScanOptions, logger: logging.
     chain = get_scanner_chain(logger)
     result = chain.scan(file_path)  # ← 内部会自动调用increment
 
-    # ===== 3. Registry 记录 =====
+    # ===== 3. 日志记录（v1.7.9: add()移到_do_scan统一管理，避免遗漏）=====
     if result.is_suspicious:
-        from core.suspicious_registry import add
-        add(file_path, result.features)
         log_with_symbol("scan_hit", "critical",
                         f"{file_path.name} | 引擎: {result.engine} | 特征: {', '.join(result.features[:3])}", logger)
     else:

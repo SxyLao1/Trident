@@ -481,9 +481,14 @@ class FileMonitorHandler(FileSystemEventHandler):
                 log_with_symbol("scan_hit", "critical",
                                 f"{event_path.name} | 引擎: {scan_result.engine}", self.logger)
 
-                # v1.7.9: 自动隔离 + Registry 联动
+                # v1.7.9: 统一在此处完成 注册→隔离→回写，保证事务完整性
                 try:
-                    from core.suspicious_registry import mark_quarantined
+                    from core.suspicious_registry import add, mark_quarantined
+
+                    # Step 1: 注册到Registry（从scanner移至此，确保不遗漏）
+                    add(event_path, scan_result.features)
+
+                    # Step 2: 隔离文件
                     rule_name = scan_result.features[0] if scan_result.features else "unknown"
                     result = quarantine_file(
                         file_path=str(event_path),
@@ -492,7 +497,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                         original_path=str(event_path)
                     )
                     if result is not None:
-                        # 隔离成功 → 更新 Registry 条目
+                        # Step 3: 隔离成功 → 回写quarantine_id到Registry
                         mark_quarantined(str(event_path), result["quarantine_id"])
                         log_with_symbol("quarantine_add", "info",
                                         f"[QUARANTINE] 已隔离: {event_path.name} -> {result['quarantine_id']}", self.logger)
@@ -667,14 +672,23 @@ class FileMonitorHandler(FileSystemEventHandler):
                                 f"{src_path.name} -> {dest_path.name}", self.logger)
                 self._update_cache_on_move(src_path, dest_path)
 
-            # 保留原有扫描逻辑
+            # v1.7.9: move事件也走统一注册+隔离流程
             if dest_path.suffix.lower() in self.monitor_extensions:
                 if self._should_monitor(dest_path):
                     try:
+                        from core.suspicious_registry import add, mark_quarantined
+                        from core.quarantine import quarantine_file
                         result = self.scan_callback(dest_path, self.scan_options, self.logger)
                         if result and result.is_suspicious:
                             log_with_symbol("scan_hit", "critical",
                                             f"{dest_path.name} | 引擎: {result.engine}", self.logger)
+                            # 注册
+                            add(dest_path, result.features)
+                            # 隔离
+                            qr = quarantine_file(str(dest_path), result.features[0] if result.features else "unknown", result.features, str(dest_path))
+                            if qr:
+                                mark_quarantined(str(dest_path), qr["quarantine_id"])
+                            # 通知
                             self._init_notifier()
                             self.notifier._safe_notify(
                                 f"WebShell改名后检测到！\n文件: {dest_path}",
