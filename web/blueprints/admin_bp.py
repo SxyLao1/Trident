@@ -344,7 +344,7 @@ def get_records():
     try:
         # ===== 防御性参数解析（修复ValueError）=====
         force_reload = request.args.get('force', 'false').lower() == 'true'
-        audit_mode = request.args.get('audit', 'false').lower() == 'true'
+        audit_mode = request.args.get('audit', 'false').lower() in ('true', '1')
 
         # 关键修复：处理page参数为空的情况
         page_str = request.args.get('page', '1')
