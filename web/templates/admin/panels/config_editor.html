@@ -63,34 +63,53 @@
     <div class="config-section-body" style="display:none; padding:14px; background:#0a0a0a; border:1px solid #1a1a1a; border-top:none; border-radius:0 0 4px 4px; display:flex; flex-direction:column; gap:14px;">
 
       <!-- Password Hash row -->
-      <div style="display:flex; align-items:center; gap:12px;">
+      <div style="display:flex; align-items:center; gap:8px;">
         <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_PASSWORD_HASH</span>
-        <code id="env-pwd-display" style="flex:1; background:#000; color:#888; padding:4px 8px; font-size:10px; border-radius:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:500px;">{{ env_vars.get('TRIDENT_PASSWORD_HASH', 'Not set')[:60] }}...</code>
-        <input type="text" id="env-pwd-input" placeholder="New password" style="width:160px; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
+        <span class="cfg-info" data-tooltip="scrypt-hashed admin login password. Use Generate Hash button, don't paste raw password.">i</span>
+        <code id="env-pwd-display" style="flex:1; background:#000; color:#888; padding:4px 8px; font-size:10px; border-radius:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:400px;">{{ env_vars.get('TRIDENT_PASSWORD_HASH', 'Not set')[:60] }}...</code>
+        <input type="text" id="env-pwd-input" placeholder="New password" style="width:140px; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
         <button class="btn btn-ghost btn-sm" onclick="generatePwdHash()" style="white-space:nowrap;">Generate Hash</button>
       </div>
 
       <!-- Server酱 key -->
-      <div style="display:flex; align-items:center; gap:12px;">
+      <div style="display:flex; align-items:center; gap:8px;">
         <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_WECHAT_API_KEY</span>
+        <span class="cfg-info" data-tooltip="ServerChan API key for WeChat push notifications. Get from sct.ftqq.com">i</span>
         <input type="text" id="env-wechat-key" value="{{ env_vars.get('TRIDENT_WECHAT_API_KEY', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
         <a href="https://sct.ftqq.com/" target="_blank" style="color:#00ff41; font-size:10px; white-space:nowrap; text-decoration:none;">Get Key</a>
       </div>
 
-      <!-- Email fields -->
-      {% for var in ['TRIDENT_EMAIL_USERNAME', 'TRIDENT_EMAIL_PASSWORD', 'TRIDENT_EMAIL_FROM', 'TRIDENT_EMAIL_TO'] %}
-      <div style="display:flex; align-items:center; gap:12px;">
-        <span style="color:#ccc; font-size:11px; min-width:150px;">{{ var }}</span>
-        <input type="{{ 'password' if 'PASSWORD' in var else 'text' }}" id="env-{{ var }}" value="{{ env_vars.get(var, '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-        {% if 'PASSWORD' in var %}
-        <span style="color:#666; font-size:10px; white-space:nowrap;">SMTP auth code</span>
-        {% endif %}
+      <!-- Email: Username -->
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_EMAIL_USERNAME</span>
+        <span class="cfg-info" data-tooltip="SMTP login account, e.g. your@163.com">i</span>
+        <input type="text" id="env-TRIDENT_EMAIL_USERNAME" value="{{ env_vars.get('TRIDENT_EMAIL_USERNAME', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
       </div>
-      {% endfor %}
+      <!-- Email: Password -->
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_EMAIL_PASSWORD</span>
+        <span class="cfg-info" data-tooltip="SMTP authorization code (not login password). 163: Settings > POP3/SMTP > Add auth code">i</span>
+        <input type="password" id="env-TRIDENT_EMAIL_PASSWORD" value="{{ env_vars.get('TRIDENT_EMAIL_PASSWORD', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
+        <span style="color:#666; font-size:10px; white-space:nowrap;">SMTP auth code</span>
+      </div>
+      <!-- Email: From -->
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_EMAIL_FROM</span>
+        <span class="cfg-info" data-tooltip="Sender address, usually same as USERNAME">i</span>
+        <input type="text" id="env-TRIDENT_EMAIL_FROM" value="{{ env_vars.get('TRIDENT_EMAIL_FROM', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
+      </div>
+      <!-- Email: To (multi) -->
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_EMAIL_TO</span>
+        <span class="cfg-info" data-tooltip="Recipients, comma-separated. e.g. alice@qq.com,bob@163.com">i</span>
+        <input type="text" id="env-TRIDENT_EMAIL_TO" value="{{ env_vars.get('TRIDENT_EMAIL_TO', '') }}" placeholder="a@qq.com,b@163.com" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
+        <span style="color:#666; font-size:10px; white-space:nowrap;">comma-separated</span>
+      </div>
 
       <!-- Webhook -->
-      <div style="display:flex; align-items:center; gap:12px;">
+      <div style="display:flex; align-items:center; gap:8px;">
         <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_WEBHOOK_SECRET</span>
+        <span class="cfg-info" data-tooltip="Shared secret for webhook signature verification. Leave empty if not using webhooks.">i</span>
         <input type="text" id="env-webhook" value="{{ env_vars.get('TRIDENT_WEBHOOK_SECRET', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
       </div>
 
