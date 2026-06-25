@@ -5,6 +5,34 @@
 
 ---
 
+## [1.7.9] - 开发中
+
+### 新增
+- 文件自动隔离：`core/quarantine.py`，支持隔离/恢复/永久删除
+- 递归 Webshell 扫描工具：`tools/recursive_webshell_scan.py`
+- 威胁情报画像系统架构设计（`ThreatIntelligence` ABC + `AttackerProfile`）
+- 三轨哈希引擎设计（ssdeep / py-tlsh / 内置 SimHash，graceful degradation）
+- WAL 目录标准化方案（`wal/` / `threat_intel/` / `archives/`）
+- 衰减引擎设计（`SimpleDecayEngine`，24h/0.5 / 72h/0.1）
+- `RELEASE_NOTES_v1.7.9-cn.md` — 增量更新的发布说明草稿
+
+### 变更
+- 文件监控：目录验证缓存从 LRU(100) 升级为 Set + TTL，无容量上限
+- 路径标准化：小写 + 正斜杠 + 绝对路径三统一（`utils/path_utils.py`）
+- 路径别名映射：move 事件自动继承 TTL
+- Config loader 换行符跨平台修复
+- `.env` 敏感配置从 `config.toml` 分离
+
+### 修复
+- `dashboard.js` — Record Detail 弹窗不显示（`showRecordDetail()` 未定义）
+- `core/quarantine.py` — 隔离失败 `FileNotFoundError` 优雅降级
+- `core/suspicious_registry.py` — `PermissionError` 降级内存模式，避免崩溃
+
+### 安全
+- 渗透测试发现 6 个漏洞（2 CRITICAL + 1 HIGH + 1 MEDIUM + 2 LOW），待修复
+
+---
+
 ## [1.7.8] - 2026-05-27
 
 ### 新增
