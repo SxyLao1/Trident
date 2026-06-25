@@ -699,11 +699,15 @@ def remove(file_path: Union[Path, str]) -> bool:
 
         for item in registry:
             if item["file_path"] == abs_path:
-                # v1.7.6-Patch1: 软删除（标记file_exists=False）
-                item["file_exists"] = False
-                item["deleted_at"] = datetime.now().isoformat()
+                # v1.7.9: 如果已被隔离（有quarantine_id），只标记file_exists=False，保留隔离信息
+                if item.get("quarantine_id"):
+                    item["file_exists"] = False
+                    logger.info(f"[REGISTRY][DELETE_AFTER_QUARANTINE] 已隔离文件被删除: {item['quarantine_id']}")
+                else:
+                    item["file_exists"] = False
+                    item["deleted_at"] = datetime.now().isoformat()
+                    logger.info(f"[REGISTRY][MARK_DELETED] 标记删除: {abs_path}")
                 found = True
-                logger.info(f"[REGISTRY][MARK_DELETED] 标记删除: {abs_path}")
                 break
 
         if not found:
