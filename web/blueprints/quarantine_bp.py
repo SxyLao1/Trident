@@ -100,17 +100,33 @@ def quarantine_detail():
         return jsonify({"error": str(e)}), 500
 
 
+def _render_quarantine_list(status=None):
+    """v1.7.9: 渲染隔离列表片段，供 restore/delete 后刷新用"""
+    config = ConfigRegistry.get_raw_config()
+    per_page = config.get("web_admin", {}).get("items_per_page", 20)
+    all_records = get_quarantine_list(status=status)
+    total = len(all_records)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    paginated = all_records[:per_page]
+    stats = get_quarantine_stats()
+    return render_template('admin/quarantine_list.html',
+        records=paginated, stats=stats, page=1, total_pages=total_pages,
+        total=total, per_page=per_page, current_status=status or 'all')
+
+
 @quarantine_bp.route('/quarantine/restore', methods=['POST'])
 @require_auth
 def quarantine_restore():
-    """恢复隔离文件"""
+    """恢复隔离文件 — v1.7.9: 返回刷新后的列表HTML"""
     try:
         qid = request.form.get('qid', '') or request.args.get('qid', '')
         if not qid:
             return jsonify({"error": "缺少 qid 参数"}), 400
 
         result = restore_file(qid)
-        return jsonify({"success": True, "message": f"文件已恢复: {result['original_path']}"})
+        # 返回刷新后的列表，保留当前筛选状态
+        status = request.args.get('status', 'quarantined')
+        return _render_quarantine_list(status=None)  # 显示全部，包含刚恢复的
 
     except Exception as e:
         current_app.logger.error(f"[QUARANTINE][RESTORE] 错误: {e}", exc_info=True)
@@ -120,14 +136,14 @@ def quarantine_restore():
 @quarantine_bp.route('/quarantine/delete', methods=['POST'])
 @require_auth
 def quarantine_delete():
-    """永久删除隔离文件"""
+    """永久删除隔离文件 — v1.7.9: 返回刷新后的列表HTML"""
     try:
         qid = request.form.get('qid', '') or request.args.get('qid', '')
         if not qid:
             return jsonify({"error": "缺少 qid 参数"}), 400
 
         delete_quarantine(qid)
-        return jsonify({"success": True, "message": "文件已永久删除"})
+        return _render_quarantine_list(status=None)
 
     except Exception as e:
         current_app.logger.error(f"[QUARANTINE][DELETE] 错误: {e}", exc_info=True)
