@@ -335,11 +335,13 @@ function filterLogAnalyzer() {
   else if (tr === '7d') minTime = now - 604800000;
   else if (tr === '30d') minTime = now - 2592000000;
   else if (tr === 'custom') {
-    // Custom absolute range
-    var fromEl = document.getElementById('analyzer-time-from');
-    var toEl = document.getElementById('analyzer-time-to');
-    if (fromEl && fromEl.value) minTime = new Date(fromEl.value).getTime();
-    if (toEl && toEl.value) maxTime = new Date(toEl.value).getTime();
+    // Custom absolute range: date + time inputs
+    var fd = document.getElementById('analyzer-time-from-date');
+    var ft = document.getElementById('analyzer-time-from-time');
+    var td = document.getElementById('analyzer-time-to-date');
+    var tt = document.getElementById('analyzer-time-to-time');
+    if (fd && fd.value) { var fv = fd.value; if (ft && ft.value) fv += 'T' + ft.value; else fv += 'T00:00'; minTime = new Date(fv).getTime(); }
+    if (td && td.value) { var tv = td.value; if (tt && tt.value) tv += 'T' + tt.value; else tv += 'T23:59'; maxTime = new Date(tv).getTime(); }
   }
 
   var v = 0;
