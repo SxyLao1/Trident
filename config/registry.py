@@ -12,6 +12,14 @@ import os
 import re
 import threading
 from pathlib import Path
+
+
+# v1.7.9: 加载 .env 环境变量（开发环境用，生产环境由 Docker/K8s 注入）
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # 生产环境未安装 python-dotenv 时跳过
 from typing import Dict, List, Optional, Any
 
 from config.loader import load_toml_config
@@ -306,3 +314,28 @@ def _load_json_with_comments(file_path: str) -> Dict[str, Any]:
         content = re.sub(r'(?<!")//.*$', '', content, flags=re.MULTILINE)
         content = re.sub(r'(?<!")#.*$', '', content, flags=re.MULTILINE)
         return json.loads(content)
+    # ===== v1.7.9: 环境变量解析 =====
+    @staticmethod
+    def _resolve_env_vars(value):
+        """递归解析字符串中的 ${ENV_NAME:-default} 语法"""
+        import os
+        import re
+
+        if isinstance(value, str):
+            pattern = r'\$\{([^:-}]+):-([^}]*)\}'
+            def replacer(m):
+                env_name, default = m.group(1), m.group(2)
+                return os.environ.get(env_name, default)
+            resolved = re.sub(pattern, replacer, value)
+            return resolved
+        elif isinstance(value, dict):
+            return {k: ConfigRegistry._resolve_env_vars(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [ConfigRegistry._resolve_env_vars(item) for item in value]
+        return value
+
+    @classmethod
+    def get_raw_config_resolved(cls):
+        """v1.7.9: 返回已解析环境变量的完整配置"""
+        return cls._resolve_env_vars(cls.get_raw_config())
+

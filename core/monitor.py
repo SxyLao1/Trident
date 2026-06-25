@@ -32,6 +32,7 @@ from utils.path_utils import normalize_path, path_to_key
 from utils.platform_utils import get_optimal_observer
 from config.registry import ConfigRegistry
 from utils.logger_factory import log_with_symbol
+from core.quarantine import quarantine_file
 
 
 class FileMonitorHandler(FileSystemEventHandler):
@@ -66,6 +67,12 @@ class FileMonitorHandler(FileSystemEventHandler):
 
         # 平台自适应配置初始化
         self._init_platform_config()
+
+        # v1.7.9: 扫描队列（异步消费，避免高并发阻塞watchdog主线程）
+        self._scan_queue = queue.Queue(maxsize=500)
+        self._scan_worker_thread = None
+        self._scan_worker_shutdown = threading.Event()
+        self._start_scan_worker()
 
         # v1.8.1: TTL缓存（Set实现，无容量上限）
         self._dir_cache: Set[str] = set()  # 目录键集合
@@ -431,22 +438,34 @@ class FileMonitorHandler(FileSystemEventHandler):
 
         return False
 
-    def _handle_event(self, event, event_type: str, override_path: Path = None):
-        """统一事件处理 (保持原有逻辑)"""
-        if event.is_directory:
+
+    # ===== v1.7.9: 异步扫描工作线程 =====
+    def _start_scan_worker(self):
+        """启动后台扫描工作线程（仅一次）"""
+        if self._scan_worker_thread is not None and self._scan_worker_thread.is_alive():
             return
+        self._scan_worker_shutdown.clear()
+        self._scan_worker_thread = threading.Thread(
+            target=self._scan_worker_loop, daemon=True, name="ScanWorker"
+        )
+        self._scan_worker_thread.start()
+        self.logger.info("[SCAN][WORKER] 异步扫描工作线程已启动")
 
-        event_path = override_path or normalize_path(event.src_path)
-        event_path = event_path.resolve()
+    def _scan_worker_loop(self):
+        """扫描队列消费循环"""
+        while not self._scan_worker_shutdown.is_set():
+            try:
+                event_path, event_type = self._scan_queue.get(timeout=1)
+                if event_path is None:
+                    break
+                self._do_scan(event_path, event_type)
+            except queue.Empty:
+                continue
+            except Exception as e:
+                self.logger.error(f"[SCAN][WORKER] 消费异常: {e}", exc_info=True)
 
-        if not self._should_monitor(event_path):
-            return
-
-        if self._is_duplicate(event_path):
-            log_with_symbol("skip_duplicate", "info",
-                            f"重复事件已过滤: {event_path.name} ({event_type})", self.logger)
-            return
-
+    def _do_scan(self, event_path, event_type):
+        """实际执行扫描（从 _handle_event 抽离）"""
         try:
             if isinstance(self.scan_callback, str):
                 module_path, func_name = self.scan_callback.rsplit('.', 1)
@@ -462,12 +481,59 @@ class FileMonitorHandler(FileSystemEventHandler):
                 log_with_symbol("scan_hit", "critical",
                                 f"{event_path.name} | 引擎: {scan_result.engine}", self.logger)
 
+                # v1.7.9: 自动隔离
+                try:
+                    rule_name = scan_result.features[0] if scan_result.features else "unknown"
+                    quarantine_file(
+                        file_path=str(event_path),
+                        rule_name=rule_name,
+                        features=scan_result.features,
+                        original_path=str(event_path)
+                    )
+                    log_with_symbol("quarantine_add", "info",
+                                    f"[QUARANTINE] 已隔离: {event_path.name}", self.logger)
+                except Exception as qe:
+                    self.logger.warning(f"[QUARANTINE] 隔离失败: {event_path.name} | {qe}")
+
+                # 告警通知
                 self._init_notifier()
                 self.notifier._safe_notify(
-                    f"WebShell检测到！\n文件: {scan_result.file_path}",
+                    f"WebShell检测到！\n文件: {scan_result.file_path}\n规则: {', '.join(scan_result.features[:3])}",
                     level="CRITICAL"
                 )
 
+        except Exception as e:
+            log_with_symbol("error_scan", "error", f"{event_path}: {e}", self.logger)
+
+    def _stop_scan_worker(self):
+        """停止扫描工作线程"""
+        self._scan_worker_shutdown.set()
+        if self._scan_worker_thread and self._scan_worker_thread.is_alive():
+            self._scan_queue.put_nowait((None, None))
+            self._scan_worker_thread.join(timeout=3)
+
+    def _handle_event(self, event, event_type: str, override_path: Path = None):
+        """v1.7.9: 统一事件处理 → 异步入队，不阻塞watchdog主线程"""
+        if event.is_directory:
+            return
+
+        event_path = override_path or normalize_path(event.src_path)
+        event_path = event_path.resolve()
+
+        if not self._should_monitor(event_path):
+            return
+
+        if self._is_duplicate(event_path):
+            log_with_symbol("skip_duplicate", "info",
+                            f"重复事件已过滤: {event_path.name} ({event_type})", self.logger)
+            return
+
+        # v1.7.9: 扫描事件入队，后台线程消费
+        try:
+            self._scan_queue.put_nowait((event_path, event_type))
+        except queue.Full:
+            log_with_symbol("scan_queue_full", "warning",
+                            f"扫描队列已满，丢弃: {event_path.name}", self.logger)
         except Exception as e:
             log_with_symbol("error_scan", "error", f"{event_path}: {e}", self.logger)
 

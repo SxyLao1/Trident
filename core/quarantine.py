@@ -1,0 +1,265 @@
+# -*- coding: utf-8 -*-
+"""
+@Time: 2026-06-09
+@Auth: SxyLao1
+@File: quarantine.py
+@IDE: PyCharm
+@Motto: HACK THE REAL
+
+v1.7.9 新增：WebShell 自动隔离模块
+- 检测到 WebShell 后自动移动到隔离目录
+- 保留原文件目录结构（quarantine/ 内用相对路径）
+- 隔离记录持久化到 JSON，支持恢复和永久删除
+- 线程安全（RLock）
+"""
+import json
+import os
+import shutil
+import threading
+import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+
+from utils.path_utils import normalize_path
+from utils.logger_factory import log_with_symbol
+
+
+# ============================================================================
+# 全局状态
+# ============================================================================
+_quarantine_lock = threading.RLock()
+_quarantine_dir: Optional[Path] = None
+_quarantine_db: Optional[Path] = None
+
+
+def _get_quarantine_dir() -> Path:
+    """获取隔离目录路径，不存在则自动创建"""
+    global _quarantine_dir
+    if _quarantine_dir is None:
+        project_root = Path(__file__).resolve().parent.parent
+        _quarantine_dir = project_root / "quarantine"
+    _quarantine_dir.mkdir(parents=True, exist_ok=True)
+    return _quarantine_dir
+
+
+def _get_db_path() -> Path:
+    """获取隔离记录数据库路径"""
+    global _quarantine_db
+    if _quarantine_db is None:
+        _quarantine_db = _get_quarantine_dir() / "quarantine.json"
+    return _quarantine_db
+
+
+def _load_db() -> List[Dict[str, Any]]:
+    """加载隔离记录数据库"""
+    db_path = _get_db_path()
+    if not db_path.exists():
+        return []
+    try:
+        with open(db_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _save_db(records: List[Dict[str, Any]]) -> None:
+    """保存隔离记录数据库"""
+    db_path = _get_db_path()
+    with open(db_path, 'w', encoding='utf-8') as f:
+        json.dump(records, f, ensure_ascii=False, indent=2)
+
+
+# ============================================================================
+# 核心接口
+# ============================================================================
+
+def quarantine_file(
+    file_path: str,
+    rule_name: str,
+    features: List[str],
+    original_path: str = None
+) -> Dict[str, Any]:
+    """
+    隔离文件
+
+    Args:
+        file_path: 文件绝对路径（当前位置）
+        rule_name: 命中的规则名
+        features: 命中的特征列表
+        original_path: 原始监控路径（用于恢复时放回正确位置）
+
+    Returns:
+        隔离记录 dict：{
+            quarantine_id, original_path, quarantine_path,
+            quarantine_time, rule_name, features, file_size, status
+        }
+    """
+    with _quarantine_lock:
+        src = normalize_path(file_path)
+        if not src.exists():
+            logger.warning(f"[QUARANTINE] 隔离源文件不存在，跳过: {file_path}")
+            return None
+
+        quarantine_dir = _get_quarantine_dir()
+
+        # 生成隔离ID：时间戳 + 8位随机hex
+        qid = f"Q-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8].upper()}"
+
+        # 隔离文件存放路径：quarantine/YYYY-MM-DD/<qid>_filename.ext
+        date_dir = quarantine_dir / datetime.now().strftime("%Y-%m-%d")
+        date_dir.mkdir(parents=True, exist_ok=True)
+
+        quarantine_file = date_dir / f"{qid}_{src.name}"
+
+        # 移动文件（不是复制，原位置删除）
+        try:
+            shutil.move(str(src), str(quarantine_file))
+        except FileNotFoundError:
+            logger.warning(f"[QUARANTINE] 源文件在移动前已被删除: {src}")
+            return None
+        except PermissionError:
+            logger.warning(f"[QUARANTINE] 权限不足，无法移动: {src}")
+            return None
+
+        # 记录元数据
+        record = {
+            "quarantine_id": qid,
+            "original_path": str(original_path or src),
+            "quarantine_path": str(quarantine_file),
+            "quarantine_time": datetime.now().isoformat(),
+            "rule_name": rule_name,
+            "features": features,
+            "file_size": src.stat().st_size,
+            "status": "quarantined",  # quarantined | restored | deleted
+        }
+
+        # 写入数据库
+        records = _load_db()
+        records.insert(0, record)  # 新记录放前面
+        _save_db(records)
+
+        log_with_symbol("quarantine_add", "INFO",
+                        f"[QUARANTINE] 文件已隔离: {src.name} -> {qid}")
+
+        return record
+
+
+def restore_file(quarantine_id: str) -> Dict[str, Any]:
+    """
+    恢复隔离文件到原始位置
+
+    Args:
+        quarantine_id: 隔离ID
+
+    Returns:
+        更新后的隔离记录
+    """
+    with _quarantine_lock:
+        records = _load_db()
+        record = None
+        for r in records:
+            if r["quarantine_id"] == quarantine_id:
+                record = r
+                break
+
+        if not record:
+            raise ValueError(f"隔离记录不存在: {quarantine_id}")
+
+        if record["status"] != "quarantined":
+            raise ValueError(f"文件状态不是隔离中，无法恢复: {record['status']}")
+
+        quarantine_path = normalize_path(record["quarantine_path"])
+        original_path = normalize_path(record["original_path"])
+
+        # 确保原始目录存在
+        original_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 移动回原始位置
+        shutil.move(str(quarantine_path), str(original_path))
+
+        # 更新记录状态
+        record["status"] = "restored"
+        record["restore_time"] = datetime.now().isoformat()
+        _save_db(records)
+
+        log_with_symbol("quarantine_restore", "INFO",
+                        f"[QUARANTINE] 文件已恢复: {quarantine_id} -> {original_path}")
+
+        return record
+
+
+def delete_quarantine(quarantine_id: str) -> None:
+    """
+    永久删除隔离文件（不可恢复）
+
+    Args:
+        quarantine_id: 隔离ID
+    """
+    with _quarantine_lock:
+        records = _load_db()
+        record = None
+        for r in records:
+            if r["quarantine_id"] == quarantine_id:
+                record = r
+                break
+
+        if not record:
+            raise ValueError(f"隔离记录不存在: {quarantine_id}")
+
+        quarantine_path = normalize_path(record["quarantine_path"])
+
+        # 如果文件还在隔离目录，物理删除
+        if quarantine_path.exists():
+            quarantine_path.unlink()
+
+        # 更新记录状态
+        record["status"] = "deleted"
+        record["delete_time"] = datetime.now().isoformat()
+        _save_db(records)
+
+        log_with_symbol("quarantine_delete", "INFO",
+                        f"[QUARANTINE] 文件已永久删除: {quarantine_id}")
+
+
+def get_quarantine_list(
+    status: str = None,
+    limit: int = 100,
+    offset: int = 0
+) -> List[Dict[str, Any]]:
+    """
+    查询隔离记录列表
+
+    Args:
+        status: 筛选状态（quarantined/restored/deleted），None 表示全部
+        limit: 返回数量
+        offset: 偏移量
+
+    Returns:
+        隔离记录列表
+    """
+    records = _load_db()
+    if status:
+        records = [r for r in records if r["status"] == status]
+    return records[offset:offset + limit]
+
+
+def get_quarantine_detail(quarantine_id: str) -> Optional[Dict[str, Any]]:
+    """获取单个隔离记录详情"""
+    records = _load_db()
+    for r in records:
+        if r["quarantine_id"] == quarantine_id:
+            return r
+    return None
+
+
+def get_quarantine_stats() -> Dict[str, int]:
+    """获取隔离统计数字"""
+    records = _load_db()
+    stats = {
+        "total": len(records),
+        "quarantined": sum(1 for r in records if r["status"] == "quarantined"),
+        "restored": sum(1 for r in records if r["status"] == "restored"),
+        "deleted": sum(1 for r in records if r["status"] == "deleted"),
+    }
+    return stats

@@ -1,0 +1,70 @@
+<div class="record-detail-modal">
+  <div class="modal-header">
+    <h3>🔍 检测详情</h3>
+    <button class="modal-close" onclick="closeRecordDetail()">&times;</button>
+  </div>
+  <div class="modal-body">
+    <div class="detail-section">
+      <h4>文件信息</h4>
+      <table class="detail-table">
+        <tr><td>文件名</td><td>{{ record.display_name }}</td></tr>
+        <tr><td>完整路径</td><td><code>{{ record.file_path }}</code></td></tr>
+        <tr><td>文件大小</td><td>{{ "%.2f"|format(record.file_size / 1024) }} KB</td></tr>
+        <tr><td>文件状态</td><td>
+          {% if record.file_exists %}
+            <span class="badge badge-green">存在</span>
+          {% else %}
+            <span class="badge badge-red">已删除</span>
+          {% endif %}
+        </td></tr>
+      </table>
+    </div>
+
+    <div class="detail-section">
+      <h4>检测信息</h4>
+      <table class="detail-table">
+        <tr><td>检测时间</td><td>{{ record.detected_at }}</td></tr>
+        <tr><td>命中规则</td><td><span class="badge badge-yellow">{{ record.rule_name }}</span></td></tr>
+        <tr><td>特征列表</td><td>
+          {% for feature in record.features %}
+            <span class="badge badge-blue">{{ feature }}</span>
+          {% endfor %}
+        </td></tr>
+        <tr><td>通信次数</td><td>{{ record.communication_count }}</td></tr>
+        <tr><td>首次发现IP</td><td>{{ record.first_seen_ip }}</td></tr>
+      </table>
+    </div>
+
+    <div class="detail-section">
+      <h4>告警状态</h4>
+      <table class="detail-table">
+        <tr><td>已告警</td><td>
+          {% if record.alerted %}
+            <span class="badge badge-green">是</span>
+          {% else %}
+            <span class="badge badge-gray">否</span>
+          {% endif %}
+        </td></tr>
+        <tr><td>误报标记</td><td>
+          {% if record.marked_false_positive %}
+            <span class="badge badge-yellow">已标记</span>
+          {% else %}
+            <span class="badge badge-gray">未标记</span>
+          {% endif %}
+        </td></tr>
+      </table>
+    </div>
+
+    {% if record.quarantine_info %}
+    <div class="detail-section">
+      <h4>🛡️ 隔离信息</h4>
+      <table class="detail-table">
+        <tr><td>隔离ID</td><td><code>{{ record.quarantine_info.quarantine_id }}</code></td></tr>
+        <tr><td>隔离路径</td><td><code>{{ record.quarantine_info.quarantine_path }}</code></td></tr>
+        <tr><td>隔离时间</td><td>{{ record.quarantine_info.quarantine_time }}</td></tr>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+<script>showRecordDetail();</script>

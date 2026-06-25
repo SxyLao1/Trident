@@ -88,6 +88,7 @@ class YaraEngine:
     def scan(self, file_path: Path) -> List[YaraMatch]:
         """
         扫描文件并返回匹配结果
+        v1.7.9-fix: 改用内存扫描(data=)替代filepath=，解决Windows中文路径YARA C库无法打开的问题
         """
         if self.compiled_rules is None:
             self.logger.warning(f"[YARA] 规则未加载，跳过扫描: {file_path.name}")
@@ -102,13 +103,17 @@ class YaraEngine:
         filesizes_cfg = config.get("filesizes", {})
         max_size_mb = filesizes_cfg.get("max_scan_file_size_mb", 10)
 
-        if file_path.stat().st_size > max_size_mb * 1024 * 1024:
+        file_size = file_path.stat().st_size
+        if file_size > max_size_mb * 1024 * 1024:
             self.logger.warning(f"[YARA] 文件过大，跳过: {file_path.name}")
             return []
 
         try:
-            # 执行扫描（保持不变）
-            matches = self.compiled_rules.match(filepath=str(file_path))
+            # v1.7.9-fix: 读取文件内容到内存，避免中文/特殊字符路径导致YARA C库报错
+            # 参考: https://github.com/VirusTotal/yara-python/issues/48
+            with open(file_path, 'rb') as f:
+                file_data = f.read()
+            matches = self.compiled_rules.match(data=file_data)
 
             if not matches:
                 self.logger.debug(f"[YARA][SAFE] {file_path.name}")

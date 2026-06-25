@@ -315,3 +315,18 @@ function confirmDelete(filename) {
     if (btn) btn.click();
   });
 }
+
+
+// v1.7.9-Patch: 修复 Record Detail Modal 显示
+function showRecordDetail() {
+    const modal = document.getElementById('record-detail-modal');
+    const overlay = document.getElementById('record-detail-modal-overlay');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('active');
+    }
+    if (overlay) {
+        overlay.style.display = 'block';
+        overlay.classList.add('active');
+    }
+}

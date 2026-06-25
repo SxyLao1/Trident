@@ -286,7 +286,7 @@ def get_status_text() -> tuple:
     info = get_wal_info()
     if info is None:
         return 'error', 'WAL文件不存在', 0.0
-    size_mb = info['size_mb']
+    size_mb = info.get('size_mb', 0.0)
     status = 'normal' if size_mb < 10 else 'warning'
     text = f'正常写入 ({size_mb:.1f}MB)' if status == 'normal' else '接近阈值'
     return status, text, size_mb

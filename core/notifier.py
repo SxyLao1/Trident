@@ -65,50 +65,105 @@ class Notifier:
             self._start_alert_worker()
 
     def _start_alert_worker(self):
-        """启动告警工作线程（仅一次）"""
+        """v1.7.9: 启动告警工作线程（批量消费，减少网络IO阻塞）"""
         if self._alert_thread is not None and self._alert_thread.is_alive():
             return
 
         def _worker():
-            self.logger.info("[ALERT][WORKER] 线程启动")
+            self.logger.info("[ALERT][WORKER] 线程启动（批量模式）")
             while True:
                 try:
-                    message, level = self._alert_queue.get(timeout=1)
-                    if message is None:  # 退出信号
-                        break
-
-                    # 处理告警
-                    self.logger.info(f"[ALERT][WORKER] 处理: {level}")
-
+                    # v1.7.9: 批量取件，每次最多10条或等待1秒
+                    batch = []
                     try:
-                        self.send_alert(message, level=level)
-                    except Exception as e:
-                        self.logger.error(f"[ALERT][WORKER] 发送失败: {e}", exc_info=True)
-                except queue.Empty:
-                    continue
+                        first = self._alert_queue.get(timeout=1)
+                        if first[0] is None:  # 退出信号
+                            break
+                        batch.append(first)
+                    except queue.Empty:
+                        continue
+
+                    # 继续取，最多再取9条（非阻塞）
+                    for _ in range(9):
+                        try:
+                            item = self._alert_queue.get_nowait()
+                            if item[0] is None:
+                                break
+                            batch.append(item)
+                        except queue.Empty:
+                            break
+
+                    # 批量处理：相同级别合并为一条消息
+                    self.logger.info(f"[ALERT][WORKER] 批量处理 {len(batch)} 条告警")
+                    if len(batch) == 1:
+                        message, level = batch[0]
+                        try:
+                            self.send_alert(message, level=level)
+                        except Exception as e:
+                            self.logger.error(f"[ALERT][WORKER] 发送失败: {e}", exc_info=True)
+                    else:
+                        # 合并发送：减少网络请求次数
+                        levels = set(l for _, l in batch)
+                        if len(levels) == 1:
+                            combined = "\n".join([f"[{i+1}] {msg[:200]}" for i, (msg, _) in enumerate(batch)])
+                            try:
+                                self.send_alert(f"批量告警 ({len(batch)}条)\n{combined}", level=list(levels)[0])
+                            except Exception as e:
+                                self.logger.error(f"[ALERT][WORKER] 批量发送失败: {e}", exc_info=True)
+                        else:
+                            # 不同级别分别发送（只发最高级别）
+                            max_level = max(levels, key=lambda x: {"INFO":0, "WARNING":1, "CRITICAL":2}.get(x, 0))
+                            critical_msgs = [msg for msg, lvl in batch if lvl == max_level]
+                            combined = "\n".join([f"[{i+1}] {msg[:200]}" for i, msg in enumerate(critical_msgs)])
+                            try:
+                                self.send_alert(f"批量告警 ({len(batch)}条, 最高级别{max_level})\n{combined}", level=max_level)
+                            except Exception as e:
+                                self.logger.error(f"[ALERT][WORKER] 批量发送失败: {e}", exc_info=True)
+
                 except Exception as e:
                     self.logger.critical(f"[ALERT][WORKER] 致命错误: {e}", exc_info=True)
                     break
 
         self._alert_thread = threading.Thread(target=_worker, daemon=True, name="AlertWorker")
         self._alert_thread.start()
-        self.logger.info("[ALERT] 告警工作线程已启动")
+        self.logger.info("[ALERT] 告警工作线程已启动（批量模式）")
+
+    def drain(self):
+        """v1.7.9: 主动疏通告警队列——清空队列并全部持久化到磁盘"""
+        drained = []
+        while True:
+            try:
+                msg, lvl = self._alert_queue.get_nowait()
+                if msg is not None:
+                    drained.append((msg, lvl))
+            except queue.Empty:
+                break
+        if drained:
+            self._persist_batch_overflow(drained)
+            self.logger.info(f"[ALERT][DRAIN] 主动疏通完成，{len(drained)}条告警已持久化")
+        return len(drained)
 
     def _safe_notify(self, message: str, level: str = "CRITICAL"):
         """
-        异步通知（唯一入口）
+        v1.7.9: 异步通知（唯一入口）
         - 正常：写入队列
+        - 队列积压>100: 丢弃旧告警，保留最新（防止内存爆炸）
         - 溢出：立即持久化到磁盘
         - 异常：双保险持久化
         """
         try:
+            # v1.7.9: 队列防积压策略——超过100条时丢弃最旧的50%
+            qsize = self._alert_queue.qsize()
+            if qsize > 100:
+                self._drain_old_alerts(qsize // 2)
+                self.logger.warning(f"[ALERT][DRAIN] 队列积压{qsize}条，已丢弃旧告警")
+
             # 尝试入队（非阻塞）
             self._alert_queue.put_nowait((message, level))
         except queue.Full:
             # 队列满：立即持久化
             self._persist_overflow(message, level)
             self._overflow_count += 1
-            # log_with_symbol("error_notifier_queue", "critical", f"告警队列溢出，持久化: {message[:50]}", self.logger)
             self.logger.critical(
                 f"[ALERT][OVERFLOW] 队列已满({self._alert_queue.qsize()}), "
                 f"已持久化: {message[:50]}..."
@@ -117,6 +172,37 @@ class Notifier:
             # 任何异常都触发持久化（最后防线）
             self.logger.error(f"[ALERT][QUEUE] 入队失败: {e}", exc_info=True)
             self._persist_overflow(message, level)
+
+    def _drain_old_alerts(self, count: int):
+        """v1.7.9: 丢弃队列中最旧的N条告警（防止积压）"""
+        drained = []
+        for _ in range(min(count, self._alert_queue.qsize())):
+            try:
+                msg, lvl = self._alert_queue.get_nowait()
+                drained.append((msg, lvl))
+            except queue.Empty:
+                break
+        # 被丢弃的告警批量持久化（不丢失）
+        if drained:
+            self._persist_batch_overflow(drained)
+
+    def _persist_batch_overflow(self, items):
+        """批量持久化溢出告警"""
+        overflow_file = normalize_path("data/alert_overflow.json")
+        overflow_file.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(overflow_file, "a", encoding='utf-8', buffering=1) as f:
+                for message, level in items:
+                    f.write(json.dumps({
+                        "timestamp": datetime.now().isoformat(),
+                        "level": level,
+                        "message": message,
+                        "dropped": True
+                    }) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+        except Exception as e:
+            print(f"[ALERT][FATAL] 批量磁盘失败: {e}", file=sys.stderr, flush=True)
 
     def _persist_overflow(self, message: str, level: str):
         """溢出持久化（内联简化版）"""
@@ -142,12 +228,18 @@ class Notifier:
         # v1.7.0重构：从配置读取超时
         base_timeout = email_cfg.get("timeout", 10)
 
+        # v1.7.9: 优先从环境变量读取密码，避免明文存储在 config.toml
+        email_password = email_cfg.get("password", "")
+        if email_password.startswith("${") or not email_password:
+            import os
+            email_password = os.environ.get("TRIDENT_EMAIL_PASSWORD", "")
+
         return {
             "enabled": email_cfg.get("enabled", False),
             "smtp_host": email_cfg.get("smtp_host", ""),
             "smtp_port": email_cfg.get("smtp_port", 587),
             "username": email_cfg.get("username", ""),
-            "password": email_cfg.get("password", ""),
+            "password": email_password,
             "from_addr": email_cfg.get("from_addr", ""),
             "to_addrs": email_cfg.get("to_addrs", []),
             "use_tls": email_cfg.get("use_tls", True),

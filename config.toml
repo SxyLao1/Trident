@@ -1,6 +1,6 @@
 [system]
-version = "1.7.8"
-release_date = "2026-05-27"
+version = "1.7.9"
+release_date = "2026-06-09"
 
 project_root = "." # 项目根目录（辅助配置）
 
@@ -16,7 +16,7 @@ host = "127.0.0.1"  # 生产环境建议绑定内网IP
 port = 8080
 username = "admin"
 # 密码哈希生成命令：python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('你的密码'))"
-password_hash = "${TRIDENT_PASSWORD_HASH:-YOUR_HASH_HERE}"  # 本地生成: python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))"
+password_hash = "${TRIDENT_PASSWORD_HASH:-}"  # v1.7.9: 空默认值，强制从.env或环境变量读取  # 本地生成: python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))"
 allowed_ips = ["127.0.0.1"]  # v1.7.1新增：IP白名单
 sse_log_levels = ["INFO", "ERROR", "CRITICAL"]  # 前端显示允许的日志级别
 items_per_page = 6  # 可疑清单每页条数
@@ -34,7 +34,7 @@ sse_max_total_clients = 20          # 全局最大连接数（默认20）
 [security]
 csrf_enabled = true  # v1.7.1新增：CSRF开关
 csrf_exclude_paths = ["/api/v1/health"]  # 排除健康检查
-secret_key = "${TRIDENT_SECRET_KEY:-YOUR_SECRET_KEY_HERE}"  # 本地生成: python -c "import secrets; print(secrets.token_hex(32))"
+secret_key = "${TRIDENT_SECRET_KEY:-}"  # v1.7.9: 空默认值，强制从.env或环境变量读取  # 本地生成: python -c "import secrets; print(secrets.token_hex(32))"
 
 [registry]
 async_save_enabled = true
@@ -349,24 +349,24 @@ health_check_port = 8080
 health_check_host = "127.0.0.1"
 
 [notifier]
-enabled = false  # CI 环境关闭，本地运行时设为 true
+enabled = true  # CI 环境关闭，本地运行时设为 true
 
 [notifier.wechat]
-enabled = false
-send_key = "YOUR_SERVERCHAN_KEY_HERE"
+enabled = true
+send_key = "${TRIDENT_WECHAT_API_KEY:-}"
 verify_ssl = false
 timeout = 10
 channel = "9"
 noip = false
 
 [notifier.email]
-enabled = false
+enabled = true
 smtp_host = "smtp.163.com"
 smtp_port = 465
-username = "your_email@example.com"
-password = "YOUR_SMTP_PASSWORD_HERE"
-from_addr = "your_email@example.com"
-to_addrs = ["your_email@example.com"]
+username = "cv5123431@163.com"
+password = "${TRIDENT_EMAIL_PASSWORD:-}"  # v1.7.9: 从环境变量读取，避免明文存储
+from_addr = "cv5123431@163.com"
+to_addrs = ["1418375962@qq.com"]
 use_tls = false
 use_ssl = true
 timeout = 30

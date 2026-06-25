@@ -476,6 +476,9 @@ def _save_registry_sync(data: List[Dict]):
 
             _get_logger().debug(f"[REGISTRY][SAVE] 保存 {len(data)} 条记录")
 
+        except PermissionError:
+            logger.warning(f"Registry file permission denied: {registry_path}, using in-memory mode")
+            return
         except Exception as e:
             logger = logging.getLogger("monitor.suspicious_registry")
             logger.error(f"[REGISTRY][SAVE] 失败: {e}", exc_info=True)

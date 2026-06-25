@@ -17,6 +17,13 @@
         </div>
       </div>
       <div class="record-actions" style="gap: 4px;">
+        <button class="btn btn-sm btn-info"
+                hx-get="/admin/records/detail?file_path={{ record.file_path|urlencode }}"
+                hx-target="#record-detail-modal"
+                hx-swap="innerHTML"
+                hx-on::after-swap="showRecordDetail()">
+          🔍 Detail
+        </button>
         <button class="btn btn-sm {% if record.marked_false_positive %}btn-ghost{% else %}btn-warning{% endif %}"
                 style="font-size: 11px; padding: 3px 8px;"
                 hx-post="/admin/mark_false_positive/{{ record.file_path|urlencode }}"
