@@ -427,8 +427,19 @@ def settings_env_save():
             f.write('# Trident .env — managed via Settings UI\n')
             for k in sorted(existing.keys()):
                 f.write(existing[k] + '\n')
+            if not f.tell() == 0:
+                pass  # Ensure file is written
 
-        return jsonify({'success': True, 'message': '.env saved'})
+        # Update os.environ and reload config so new values take effect immediately
+        for k, v in vars_data.items():
+            if v:
+                os.environ[k] = v
+        try:
+            ConfigRegistry.initialize(force=True)
+        except Exception:
+            pass
+
+        return jsonify({'success': True, 'message': '.env saved + config reloaded'})
     except Exception as e:
         current_app.logger.error(f"[ADMIN] env save failed: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
