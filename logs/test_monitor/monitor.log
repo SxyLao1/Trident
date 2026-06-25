@@ -1,6 +1,0 @@
-[2026-06-25 20:14:38,393] INFO - [SCAN][WORKER] 异步扫描工作线程已启动
-[2026-06-25 20:14:38,394] INFO - [ALERT][WORKER] 线程启动（批量模式）
-[2026-06-25 20:14:38,394] INFO - [ALERT] 告警工作线程已启动（批量模式）
-[2026-06-25 20:14:38,394] INFO - [MONITOR][START][SUCCESS] 初始化成功
-[2026-06-25 20:14:38,394] DEBUG - [MONITOR][START][SUCCESS] 处理器初始化完成 | 平台: windows | 验证延迟: 50ms | 缓存策略: TTL-60.0s无限制
-[2026-06-25 20:14:38,395] INFO - [MONITOR][CREATE][FILE] test_create.php

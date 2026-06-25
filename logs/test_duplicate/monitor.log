@@ -1,8 +1,0 @@
-[2026-06-25 20:14:38,501] INFO - [SCAN][WORKER] 异步扫描工作线程已启动
-[2026-06-25 20:14:38,501] INFO - [MONITOR][START][SUCCESS] 初始化成功
-[2026-06-25 20:14:38,501] DEBUG - [MONITOR][START][SUCCESS] 处理器初始化完成 | 平台: windows | 验证延迟: 50ms | 缓存策略: TTL-60.0s无限制
-[2026-06-25 20:14:38,501] INFO - [MONITOR][CREATE][FILE] test_dup.php
-[2026-06-25 20:14:38,555] INFO - [MONITOR][MODIFY][FILE] test_dup.php
-[2026-06-25 20:14:38,555] INFO - [MONITOR][SKIP][DUPLICATE] 跳过重复事件: test_dup.php (距上次: 0.05s)
-[2026-06-25 20:14:38,556] INFO - [MONITOR][SKIP][DUPLICATE] 重复事件已过滤: test_dup.php (MODIFY)
-[2026-06-25 20:14:43,708] INFO - [MONITOR][MODIFY][FILE] test_dup.php

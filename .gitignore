@@ -6,3 +6,6 @@
 *.key
 data/alert_overflow.json
 __pycache__/
+data/
+logs/
+temp/
