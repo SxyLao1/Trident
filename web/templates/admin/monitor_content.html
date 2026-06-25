@@ -7,7 +7,7 @@
     </div>
     <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto;" id="metrics-panel"
          hx-get="/admin/metrics/data"
-         hx-trigger="load"
+         hx-trigger="load, every 10s"
          hx-swap="innerHTML">
       <div class="empty-state">
         <div class="spinner"></div>
@@ -74,7 +74,7 @@
     <div class="card-body" style="flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: column;">
       <div id="records-table-container" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;"
            hx-get="/admin/records?compact=1"
-           hx-trigger="load"
+           hx-trigger="load, every 10s"
            hx-swap="innerHTML">
         <div class="empty-state"><div class="spinner"></div><p>Loading records...</p></div>
       </div>
