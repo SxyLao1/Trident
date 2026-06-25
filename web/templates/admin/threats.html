@@ -19,7 +19,7 @@
     </button>
   </div>
 
-  <!-- Active Threats (Records) -->
+  <!-- Active Threats -->
   <div id="threats-tab-active" class="threats-tab-content" style="flex: 1; overflow: hidden; display: flex;">
     <div id="threats-active-container" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;"
          hx-get="/admin/records?compact=1"
@@ -29,29 +29,28 @@
     </div>
   </div>
 
-  <!-- Quarantine -->
+  <!-- Quarantine (lazy loaded on first tab switch) -->
   <div id="threats-tab-quarantine" class="threats-tab-content" style="flex: 1; overflow: hidden; display: none;">
     <div id="threats-quarantine-container" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;"
          hx-get="/admin/quarantine?status=quarantined"
-         hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading quarantine...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>Click tab to load...</p></div>
     </div>
   </div>
 
-  <!-- Audit Log -->
+  <!-- Audit Log (lazy loaded on first tab switch) -->
   <div id="threats-tab-audit" class="threats-tab-content" style="flex: 1; overflow: hidden; display: none;">
     <div id="threats-audit-container" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;"
          hx-get="/admin/records?audit=true&compact=1"
-         hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading audit log...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>Click tab to load...</p></div>
     </div>
   </div>
 </div>
 
 <script>
-// v1.8.0: Threats tab switching
+var _threatsTabsLoaded = {active: true, quarantine: false, audit: false};
+
 function switchThreatsTab(tab) {
   // Update tab styles
   document.querySelectorAll('.threats-tab').forEach(function(t) {
@@ -70,6 +69,16 @@ function switchThreatsTab(tab) {
     c.style.display = 'none';
   });
   var content = document.getElementById('threats-tab-' + tab);
-  if (content) content.style.display = 'flex';
+  if (content) {
+    content.style.display = 'flex';
+    // Lazy load: trigger HTMX on first visit
+    if (!_threatsTabsLoaded[tab]) {
+      _threatsTabsLoaded[tab] = true;
+      var container = document.getElementById('threats-' + tab + '-container');
+      if (container && window.htmx) {
+        htmx.trigger(container, 'load');
+      }
+    }
+  }
 }
 </script>

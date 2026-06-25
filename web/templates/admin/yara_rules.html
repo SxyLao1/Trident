@@ -1,29 +1,34 @@
+<!-- v1.8.0: YARA Rules — 批量操作 + 全宽工具栏 -->
 <div id="yara-rules-container" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;">
   {% if not compact %}
-  <div class="page-toolbar" style="display: flex; gap: 12px; margin-bottom: 16px; align-items: center;">
-    <input type="text" class="form-input" style="max-width: 320px;" placeholder="Search rules..."
+  <!-- Unified toolbar: search + batch + upload -->
+  <div style="display: flex; gap: 12px; margin-bottom: 12px; align-items: center; flex-wrap: wrap;">
+    <input type="text" class="form-input" style="flex: 1; min-width: 200px; max-width: 400px;" placeholder="Search rules..."
            name="q" value="{{ request.args.get('q', '') }}"
            hx-get="/admin/yara/search?compact=1"
            hx-trigger="keyup changed delay:500ms"
            hx-target="#yara-rules-container"
            hx-swap="outerHTML">
-    <button class="btn btn-primary btn-sm" onclick="window._yaraShowUploadModal()">[+] Upload Rule</button>
+    <span style="display: flex; gap: 8px; align-items: center;">
+      <button id="yara-select-all-btn" class="btn btn-ghost btn-sm" style="font-size: 11px;"
+              onclick="yaraSelectAll()">Select All</button>
+      <button id="yara-deselect-btn" class="btn btn-ghost btn-sm" style="font-size: 11px; display: none;"
+              onclick="yaraDeselectAll()">Clear</button>
+      <span id="yara-selected-count" style="font-size: 11px; color: #00ff41; display: none; white-space: nowrap;">0 selected</span>
+      <button id="yara-batch-delete-btn" class="btn btn-danger btn-sm" style="font-size: 11px; display: none;"
+              onclick="yaraBatchDelete()">Delete Selected</button>
+      <span style="color: #333; margin: 0 4px;">|</span>
+      <button class="btn btn-primary btn-sm" onclick="window._yaraShowUploadModal()">[+] Upload</button>
+    </span>
   </div>
   {% endif %}
 
-  {% if not compact %}
-  <div class="batch-toolbar" style="display: none; gap: 8px; margin-bottom: 12px; padding: 8px 12px; background: rgba(0,255,65,0.05); border: 1px solid rgba(0,255,65,0.2); border-radius: 4px; align-items: center;">
-    <input type="checkbox" id="yara-batch-select-all" onclick="toggleSelectAllYara(this)" style="margin-right: 4px;">
-    <label for="yara-batch-select-all" style="font-size: 12px; color: var(--color-text-muted); margin-right: 12px;">全选</label>
-    <span id="yara-batch-count" style="font-size: 12px; color: var(--color-accent); margin-right: 12px;">0 selected</span>
-    <button class="btn btn-danger btn-sm" onclick="batchDeleteYara()" style="font-size: 11px;">Batch Delete</button>
-  </div>
-  {% endif %}
   <div class="record-list">
     {% for rule in rules %}
     <div class="record-item" data-filename="{{ rule.filename }}">
       {% if not compact %}
-      <input type="checkbox" class="yara-batch-checkbox" style="margin-right: 10px; accent-color: var(--color-accent);" onchange="updateYaraBatchCount()">
+      <input type="checkbox" class="yara-checkbox" data-filename="{{ rule.filename }}"
+             style="margin-right: 10px; accent-color: var(--color-accent);" onchange="yaraUpdateSelection()">
       {% endif %}
       <div class="record-info">
         <div class="record-title">{{ rule.filename }}</div>
@@ -60,18 +65,17 @@
     </div>
     {% else %}
     <div class="empty-state">
-      <div class="empty-state-icon">🛡</div>
       <p>No YARA rules installed</p>
     </div>
     {% endfor %}
   </div>
 
   {% if total_pages > 1 %}
-  <div class="pagination-bar">
+  <div class="pagination-bar" style="margin-top: 12px;">
     <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %}
             hx-get="/admin/yara/rules?page={{ page - 1 }}{% if compact %}&compact=1{% endif %}"
             hx-target="#yara-rules-container"
-            hx-swap="outerHTML">← Prev</button>
+            hx-swap="outerHTML">Prev</button>
     <span class="page-info">Page {{ page }} / {{ total_pages }} ({{ total }} total)</span>
     <div class="page-jump">
       <input type="number" class="form-input" style="width: 60px; text-align: center;" min="1" max="{{ total_pages }}" value="{{ page }}"
@@ -80,7 +84,76 @@
     <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %}
             hx-get="/admin/yara/rules?page={{ page + 1 }}{% if compact %}&compact=1{% endif %}"
             hx-target="#yara-rules-container"
-            hx-swap="outerHTML">Next →</button>
+            hx-swap="outerHTML">Next</button>
   </div>
   {% endif %}
 </div>
+
+{% if not compact %}
+<script>
+// v1.8.0: YARA cross-page selection
+window._yaraSelected = window._yaraSelected || [];
+
+function yaraUpdateSelection() {
+  var checked = document.querySelectorAll('.yara-checkbox:checked');
+  checked.forEach(function(cb) {
+    var fn = cb.dataset.filename;
+    if (window._yaraSelected.indexOf(fn) < 0) window._yaraSelected.push(fn);
+  });
+  // Remove unchecked
+  var allBoxes = document.querySelectorAll('.yara-checkbox');
+  allBoxes.forEach(function(cb) {
+    if (!cb.checked) {
+      var idx = window._yaraSelected.indexOf(cb.dataset.filename);
+      if (idx >= 0) window._yaraSelected.splice(idx, 1);
+    }
+  });
+  yaraRefreshUI();
+}
+
+function yaraSelectAll() {
+  document.querySelectorAll('.yara-checkbox').forEach(function(cb) {
+    cb.checked = true;
+    var fn = cb.dataset.filename;
+    if (window._yaraSelected.indexOf(fn) < 0) window._yaraSelected.push(fn);
+  });
+  yaraRefreshUI();
+}
+
+function yaraDeselectAll() {
+  window._yaraSelected = [];
+  document.querySelectorAll('.yara-checkbox').forEach(function(cb) { cb.checked = false; });
+  yaraRefreshUI();
+}
+
+function yaraRefreshUI() {
+  var count = window._yaraSelected.length;
+  var countEl = document.getElementById('yara-selected-count');
+  var delBtn = document.getElementById('yara-batch-delete-btn');
+  var selAll = document.getElementById('yara-select-all-btn');
+  var desel = document.getElementById('yara-deselect-btn');
+  if (countEl) { countEl.textContent = count + ' selected'; countEl.style.display = count > 0 ? '' : 'none'; }
+  if (delBtn) delBtn.style.display = count > 0 ? '' : 'none';
+  if (desel) desel.style.display = count > 0 ? '' : 'none';
+  if (selAll) selAll.style.display = count > 0 ? 'none' : '';
+  // Restore checkmarks from _yaraSelected
+  document.querySelectorAll('.yara-checkbox').forEach(function(cb) {
+    cb.checked = window._yaraSelected.indexOf(cb.dataset.filename) >= 0;
+  });
+}
+
+function yaraBatchDelete() {
+  if (window._yaraSelected.length === 0) return;
+  if (!confirm('Delete ' + window._yaraSelected.length + ' selected rule(s)?')) return;
+  var remaining = window._yaraSelected.length;
+  window._yaraSelected.forEach(function(fn) {
+    fetch('/admin/yara/rules/' + encodeURIComponent(fn), { method: 'DELETE', headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '' } })
+      .then(function() { remaining--; if (remaining <= 0) { window._yaraSelected = []; htmx.ajax('GET', '/admin/yara/rules', { target: '#yara-rules-container', swap: 'outerHTML' }); } })
+      .catch(function() { remaining--; });
+  });
+}
+
+// Restore state after HTMX swap
+document.addEventListener('htmx:afterSettle', function() { yaraRefreshUI(); });
+</script>
+{% endif %}
