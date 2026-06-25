@@ -191,8 +191,10 @@ function generatePwdHash() {
     body: JSON.stringify({password: pwd})
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.hash) {
+      // Store hash for Save .env and show preview
       document.getElementById('env-pwd-input').value = '';
       document.getElementById('env-pwd-display').textContent = data.hash.substring(0, 60) + '...';
+      document.getElementById('env-pwd-display').dataset.hash = data.hash;
     }
   });
 }
@@ -200,9 +202,11 @@ function generatePwdHash() {
 function saveEnvVars() {
   var vars = {};
   // Collect all env inputs
-  ['TRIDENT_PASSWORD_HASH', 'TRIDENT_WECHAT_API_KEY',
+  var hashVal = document.getElementById('env-pwd-display')?.dataset?.hash;
+  if (hashVal) vars['TRIDENT_PASSWORD_HASH'] = hashVal;
+  ['TRIDENT_WECHAT_API_KEY',
    'TRIDENT_EMAIL_USERNAME', 'TRIDENT_EMAIL_PASSWORD', 'TRIDENT_EMAIL_FROM', 'TRIDENT_EMAIL_TO',
-   'TRIDENT_WEBHOOK_SECRET', 'TRIDENT_SECRET_KEY'].forEach(function(k) {
+   'TRIDENT_WEBHOOK_SECRET'].forEach(function(k) {
     var el = document.getElementById('env-' + k);
     if (el) vars[k] = el.value;
   });
