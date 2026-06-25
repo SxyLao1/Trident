@@ -209,6 +209,128 @@ def settings_notifications():
         return f'<div style="color:#ff4444;">加载失败: {e}</div>', 500
 
 
+@admin_bp.route('/settings/config/editor')
+@require_auth
+def settings_config_editor():
+    """v1.8.0: 动态 config.toml 编辑器页面片段"""
+    return render_template('admin/panels/config_editor.html')
+
+
+@admin_bp.route('/settings/config/save', methods=['POST'])
+@require_auth
+def settings_config_save():
+    """v1.8.0: 保存 config.toml 修改"""
+    try:
+        import re as _re
+        data = request.get_json()
+        changes = data.get('changes', {})
+        if not changes:
+            return jsonify({'success': False, 'error': 'No changes'}), 400
+
+        config_path = ConfigRegistry._config_path
+        with open(config_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        for full_key, new_val in changes.items():
+            section, key = full_key.rsplit('.', 1)
+            section_header = '[' + section + ']'
+            in_section = False
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if stripped == section_header:
+                    in_section = True
+                    continue
+                if in_section:
+                    if stripped.startswith('['):
+                        break
+                    if stripped.startswith(key + ' =') or stripped.startswith(key + '='):
+                        # Format value based on type
+                        if isinstance(new_val, bool):
+                            val_str = 'true' if new_val else 'false'
+                        elif isinstance(new_val, (int, float)):
+                            val_str = str(new_val)
+                        else:
+                            val_str = '"' + str(new_val) + '"'
+                        lines[i] = key + ' = ' + val_str + '\n'
+                        break
+
+        with open(config_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+        # Force config reload
+        try:
+            ConfigRegistry.initialize(force=True)
+        except Exception:
+            pass
+
+        return jsonify({'success': True, 'message': 'Config saved'})
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] config save failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@admin_bp.route('/settings/config/data')
+@require_auth
+def settings_config_data():
+    """v1.8.0: 返回 config.toml 结构化数据 + 注释描述，前端动态渲染"""
+    try:
+        config_path = ConfigRegistry._config_path
+        sections = {}
+        current_section = None
+        pending_desc = None
+
+        with open(config_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        for line in lines:
+            stripped = line.strip()
+
+            # Parse @desc comment
+            if stripped.startswith('# @desc:'):
+                pending_desc = stripped.split('@desc:', 1)[1].strip()
+                continue
+            # Skip other comments and empty lines
+            if stripped.startswith('#') or not stripped:
+                continue
+
+            # Section header
+            if stripped.startswith('[') and stripped.endswith(']'):
+                current_section = stripped[1:-1]
+                sections[current_section] = {'title': current_section, 'fields': {}}
+                continue
+
+            # Key-value
+            if '=' in stripped and current_section:
+                key, _, value = stripped.partition('=')
+                key = key.strip()
+                value = value.strip().rstrip('#').strip()
+
+                # Determine type
+                if value.startswith('"') and value.endswith('"'):
+                    ftype, fval = 'string', value[1:-1]
+                elif value.lower() in ('true', 'false'):
+                    ftype, fval = 'bool', value.lower() == 'true'
+                elif value.startswith('['):
+                    ftype, fval = 'array', value
+                elif value.replace('.', '').replace('-', '').isdigit() or (value.startswith('-') and value[1:].replace('.', '').isdigit()):
+                    ftype = 'float' if '.' in value else 'int'
+                    fval = float(value) if '.' in value else int(value)
+                else:
+                    ftype, fval = 'string', value
+
+                sections[current_section]['fields'][key] = {
+                    'value': fval if ftype != 'array' else value,
+                    'type': ftype,
+                    'desc': pending_desc or ''
+                }
+                pending_desc = None
+
+        return jsonify({'sections': sections, 'path': str(config_path)})
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] config data failed: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
 @admin_bp.route('/settings/notifications/save', methods=['POST'])
 @require_auth
 def settings_notifications_save():

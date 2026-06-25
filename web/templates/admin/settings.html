@@ -27,6 +27,17 @@
     </div>
   </div>
 
+  <!-- Config Editor (full width) -->
+  <div class="card" style="grid-column: 1 / -1;">
+    <div class="card-header"><span><span class="card-header-icon">◆</span> CONFIG EDITOR</span></div>
+    <div class="card-body" style="padding: 16px;" id="settings-config"
+         hx-get="/admin/settings/config/editor"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+      <div class="empty-state"><div class="spinner"></div><p>Loading config editor...</p></div>
+    </div>
+  </div>
+
   <!-- Notifications (full width) -->
   <div class="card" style="grid-column: 1 / -1;">
     <div class="card-header"><span><span class="card-header-icon">◆</span> NOTIFICATIONS</span></div>
