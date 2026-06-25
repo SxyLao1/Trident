@@ -1,65 +1,86 @@
-<!-- v1.8.0: Dynamic config.toml editor — server-rendered -->
-<div id="config-editor" style="display:flex; flex-direction:column; gap:16px;">
+<!-- v1.8.0: Hierarchical config editor with tree view + .env section -->
+<div style="display:flex; flex-direction:column; gap:16px;">
   <div style="display:flex; align-items:center; gap:12px;">
-    <span style="color:#888; font-size:12px;">Path: <code style="color:#ccc;">{{ config_path }}</code></span>
+    <span style="color:#888; font-size:12px;"><code style="color:#ccc;">{{ config_path }}</code></span>
     <span style="flex:1;"></span>
-    <span id="config-saved" style="color:#00ff41; font-size:12px; display:none;">Saved OK</span>
-    <button class="btn btn-primary btn-sm" onclick="saveConfig()">Save Changes</button>
+    <span id="config-saved" style="color:#00ff41; font-size:12px; display:none;">Saved</span>
+    <button class="btn btn-primary btn-sm" onclick="saveConfig()">Save config.toml</button>
   </div>
-  <div id="config-sections">
-    {% for sec_name, fields in sections.items() %}
-    <div class="config-section">
-      <div class="config-section-header" onclick="var b=this.nextElementSibling;b.style.display=b.style.display==='none'?'':'none'">
-        <h4>[{{ sec_name }}]</h4>
-        <span style="color:#666; font-size:10px;">{{ fields|length }} fields</span>
+
+  <!-- Tree -->
+  <div id="config-tree" style="font-family:var(--font-mono); font-size:12px; background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:8px 0;">
+    {% macro render_section(sec_name, fields, level) %}
+    {% set indent = level * 20 %}
+    <div class="cfg-section" data-section="{{ sec_name }}">
+      <div class="cfg-section-hdr" onclick="toggleCfgSection(this)" style="padding:4px 12px; padding-left:{{ 12 + indent }}px; cursor:pointer; display:flex; align-items:center; gap:8px;">
+        <span class="cfg-arrow" style="font-size:10px; color:#666; width:12px;">▼</span>
+        <span style="color:#00ff41; font-weight:bold;">[{{ sec_name }}]</span>
+        <span style="color:#555; font-size:10px;">{{ fields|length }} fields</span>
       </div>
-      <div class="config-section-body" {% if loop.index > 5 %}style="display:none;"{% endif %}>
+      <div class="cfg-section-body">
         {% for f in fields %}
-        <div class="config-field">
-          <label>{{ f.key }}</label>
+        <div class="cfg-field" style="padding:3px 12px; padding-left:{{ 36 + indent }}px; display:flex; align-items:center; gap:8px;">
+          <span style="color:#ccc; min-width:160px;">{{ f.key }}</span>
           {% if f.desc %}
-          <span class="config-info" data-tooltip="{{ f.desc }}">i</span>
+          <span class="cfg-info" data-tooltip="{{ f.desc }}">i</span>
           {% else %}
-          <span style="width:16px;"></span>
+          <span style="width:15px;"></span>
           {% endif %}
-          {% if f.type == 'bool' %}
+          {% if f.is_env %}
+          <input type="text" value="{{ f.display }}" data-key="{{ sec_name }}.{{ f.key }}" disabled
+                 style="flex:1; background:#111; color:#555; border:1px solid #222; padding:2px 6px; font-size:11px; border-radius:2px; font-family:var(--font-mono); cursor:not-allowed;">
+          <span style="color:#666; font-size:10px; white-space:nowrap;">(env var)</span>
+          {% elif f.type == 'bool' %}
           <input type="checkbox" data-key="{{ sec_name }}.{{ f.key }}" {% if f.value %}checked{% endif %} onchange="markDirty()">
-          <span style="color:#888; font-size:11px;">{{ 'true' if f.value else 'false' }}</span>
+          <span style="color:#888; font-size:10px;">{{ 'true' if f.value else 'false' }}</span>
           {% elif f.type in ('int', 'float') %}
-          <input type="number" value="{{ f.value }}" data-key="{{ sec_name }}.{{ f.key }}" onchange="markDirty()" style="max-width:200px;">
+          <input type="number" value="{{ f.value }}" data-key="{{ sec_name }}.{{ f.key }}" onchange="markDirty()" style="max-width:180px; background:#000; color:#ccc; border:1px solid #333; padding:2px 6px; font-size:11px; border-radius:2px; font-family:var(--font-mono);">
           {% elif f.type == 'array' %}
-          <input type="text" value="{{ f.raw }}" data-key="{{ sec_name }}.{{ f.key }}" onchange="markDirty()">
+          <input type="text" value="{{ f.raw }}" data-key="{{ sec_name }}.{{ f.key }}" onchange="markDirty()" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:2px 6px; font-size:11px; border-radius:2px; font-family:var(--font-mono);">
           {% else %}
-          <input type="text" value="{{ f.value }}" data-key="{{ sec_name }}.{{ f.key }}" onchange="markDirty()">
+          <input type="text" value="{{ f.value }}" data-key="{{ sec_name }}.{{ f.key }}" onchange="markDirty()" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:2px 6px; font-size:11px; border-radius:2px; font-family:var(--font-mono);">
           {% endif %}
         </div>
         {% endfor %}
       </div>
     </div>
+    {% endmacro %}
+
+    {% for sec_name, fields in sections.items() %}
+    {{ render_section(sec_name, fields, sections_levels.get(sec_name, 0)) }}
     {% endfor %}
+  </div>
+
+  <!-- .env Editor -->
+  <div class="config-section">
+    <div class="config-section-header" onclick="var b=this.nextElementSibling;b.style.display=b.style.display==='none'?'':'none'">
+      <h4>.env File</h4><span style="color:#666; font-size:10px;">sensitive credentials</span>
+    </div>
+    <div class="config-section-body" style="display:none;">
+      <textarea id="env-editor" style="width:100%; height:180px; background:#000; color:#ccc; border:1px solid #333; padding:10px; font-size:11px; font-family:var(--font-mono); border-radius:3px; resize:vertical;">{{ env_content }}</textarea>
+      <div style="margin-top:8px; display:flex; gap:8px;">
+        <button class="btn btn-primary btn-sm" onclick="saveEnv()">Save .env</button>
+        <span id="env-saved" style="color:#00ff41; font-size:12px; display:none;">Saved</span>
+        <span style="color:#888; font-size:11px;">Credentials stored in .env are never committed to git.</span>
+      </div>
+    </div>
   </div>
 </div>
 
 <style>
-.config-section { background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; margin-bottom:10px; }
-.config-section-header { display:flex; align-items:center; padding:8px 14px; cursor:pointer; border-bottom:1px solid #1a1a1a; }
-.config-section-header:hover { background:#111; }
-.config-section-header h4 { color:#00ff41; margin:0; font-size:13px; flex:1; }
-.config-section-body { padding:10px 14px; display:flex; flex-direction:column; gap:6px; }
-.config-field { display:flex; align-items:center; gap:8px; padding:2px 0; }
-.config-field label { color:#ccc; font-size:11px; min-width:180px; font-family:var(--font-mono); }
-.config-field input[type="text"],
-.config-field input[type="number"] { flex:1; background:#000; color:#ccc; border:1px solid #333; padding:3px 6px; font-size:11px; border-radius:3px; font-family:var(--font-mono); }
-.config-field input[type="checkbox"] { accent-color:#00ff41; width:15px; height:15px; }
-.config-info { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%; border:1px solid #666; color:#666; font-size:10px; font-weight:bold; cursor:help; position:relative; flex-shrink:0; }
-.config-info:hover { border-color:#00ff41; color:#00ff41; }
-.config-info:hover::after { content:attr(data-tooltip); position:absolute; bottom:120%; left:50%; transform:translateX(-50%); background:#1a1a1a; color:#ccc; border:1px solid #00ff41; padding:5px 8px; font-size:10px; font-weight:normal; white-space:nowrap; border-radius:3px; z-index:10; pointer-events:none; }
+.cfg-section-hdr:hover { background:#0d0d0d; }
+.cfg-section.collapsed .cfg-section-body { display:none; }
+.cfg-section.collapsed .cfg-arrow { transform:rotate(-90deg); display:inline-block; }
+.cfg-info { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; border:1px solid #555; color:#555; font-size:9px; font-weight:bold; cursor:help; position:relative; flex-shrink:0; }
+.cfg-info:hover { border-color:#00ff41; color:#00ff41; }
+.cfg-info:hover::after { content:attr(data-tooltip); position:absolute; bottom:120%; left:50%; transform:translateX(-50%); background:#1a1a1a; color:#ccc; border:1px solid #00ff41; padding:4px 8px; font-size:10px; font-weight:normal; white-space:nowrap; border-radius:3px; z-index:10; pointer-events:none; }
 </style>
 
 <script>
-// These functions run because config_editor.html is loaded via HTMX hx-get (not innerHTML)
-// hx-trigger="load" on the parent card triggers this request, and HTMX DOES execute scripts
-// from hx-get responses (unlike innerHTML).
+function toggleCfgSection(hdr) {
+  var sec = hdr.parentElement;
+  sec.classList.toggle('collapsed');
+}
 
 function markDirty() {
   var el = document.getElementById('config-saved');
@@ -68,29 +89,35 @@ function markDirty() {
 
 function saveConfig() {
   var changes = {};
-  document.querySelectorAll('#config-sections input').forEach(function(inp) {
-    var key = inp.dataset.key;
-    if (!key) return;
+  document.querySelectorAll('#config-tree input:not([disabled])').forEach(function(inp) {
+    var key = inp.dataset.key; if (!key) return;
     var val;
     if (inp.type === 'checkbox') val = inp.checked;
     else if (inp.type === 'number') val = parseFloat(inp.value) || 0;
     else val = inp.value;
     changes[key] = val;
   });
-
   fetch('/admin/settings/config/save', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
     body: JSON.stringify({changes: changes})
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
+  }).then(function(r) { return r.json(); }).then(function(data) {
     var el = document.getElementById('config-saved');
-    if (data.success) {
-      if (el) { el.style.display = ''; el.textContent = 'Saved OK'; }
-    } else {
-      if (el) { el.style.display = ''; el.textContent = 'Error: ' + (data.error || 'unknown'); el.style.color = '#ff4444'; }
-    }
+    if (data.success) { if (el) { el.style.display = ''; el.textContent = 'Saved'; } }
+    else { if (el) { el.style.display = ''; el.textContent = 'Error: ' + (data.error || 'unknown'); el.style.color = '#ff4444'; } }
+  });
+}
+
+function saveEnv() {
+  var content = document.getElementById('env-editor').value;
+  fetch('/admin/settings/env/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
+    body: JSON.stringify({content: content})
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    var el = document.getElementById('env-saved');
+    if (data.success) { if (el) { el.style.display = ''; el.textContent = 'Saved'; } }
+    else { if (el) { el.style.display = ''; el.textContent = 'Error: ' + (data.error || 'unknown'); el.style.color = '#ff4444'; } }
   });
 }
 </script>

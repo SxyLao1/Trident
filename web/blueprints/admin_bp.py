@@ -214,6 +214,7 @@ def settings_notifications():
 def settings_config_editor():
     """v1.8.0: 动态 config.toml 编辑器 —— 服务端解析结构，模板渲染"""
     try:
+        import re as _re
         config_path = ConfigRegistry._config_path
         sections = {}
         current_section = None
@@ -237,6 +238,8 @@ def settings_config_editor():
                 key, _, value = stripped.partition('=')
                 key = key.strip()
                 raw = value.strip().rstrip('#').strip()
+                # Check if env var placeholder
+                is_env = '${' in raw and '}' in raw
                 if raw.startswith('"') and raw.endswith('"'):
                     ftype, fval = 'string', raw[1:-1]
                 elif raw.lower() in ('true', 'false'):
@@ -250,12 +253,27 @@ def settings_config_editor():
                     ftype, fval = 'string', raw
                 sections[current_section].append({
                     'key': key, 'value': fval, 'type': ftype, 'raw': raw,
-                    'desc': pending_desc or ''
+                    'desc': pending_desc or '', 'is_env': is_env,
+                    'display': ('(env: ' + raw[2:-1].split(':-')[0] + ')' if is_env else fval)
                 })
                 pending_desc = None
 
+        # Calculate nesting levels for tree display
+        levels = {}
+        for sec_name in sections:
+            depth = sec_name.count('.')
+            levels[sec_name] = depth
+
+        # Load .env content
+        env_content = ""
+        env_path = os.path.join(os.path.dirname(config_path), '.env')
+        if os.path.exists(env_path):
+            with open(env_path, 'r', encoding='utf-8') as f:
+                env_content = f.read()
+
         return render_template('admin/panels/config_editor.html',
-            sections=sections, config_path=str(config_path))
+            sections=sections, sections_levels=levels,
+            config_path=str(config_path), env_content=env_content)
     except Exception as e:
         current_app.logger.error(f"[ADMIN] config editor failed: {e}", exc_info=True)
         return f'<div style="color:#ff4444;">Config load error: {e}</div>', 500
@@ -374,6 +392,23 @@ def settings_config_data():
     except Exception as e:
         current_app.logger.error(f"[ADMIN] config data failed: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/settings/env/save', methods=['POST'])
+@require_auth
+def settings_env_save():
+    """v1.8.0: 保存 .env 文件"""
+    try:
+        data = request.get_json()
+        content = data.get('content', '')
+        config_path = ConfigRegistry._config_path
+        env_path = os.path.join(os.path.dirname(config_path), '.env')
+        with open(env_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return jsonify({'success': True, 'message': '.env saved'})
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] env save failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @admin_bp.route('/settings/notifications/save', methods=['POST'])
