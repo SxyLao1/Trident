@@ -41,6 +41,7 @@ from web.blueprints.yara_bp import yara_bp
 from utils.sse_manager import register_sse_client, unregister_sse_client, _sse_clients, \
     _registry_update_queue, trigger_registry_update
 from utils.password_utils import check_password_strength, update_password_hash_in_config
+from web.auth import require_auth, get_admin_credentials
 
 # 创建Blueprint
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -84,33 +85,10 @@ def start_registry_sse_worker():
     return worker
 
 
-def get_admin_credentials():
-    cfg = ConfigRegistry.get_raw_config().get("web_admin", {})
-    username = cfg.get("username", "admin")
-    password_hash = cfg.get("password_hash", "")
-    allowed_ips = cfg.get("allowed_ips", ["127.0.0.1"])
-    return username, password_hash, allowed_ips
-
-
 def generate_secure_sse_token(username: str) -> str:
     random_part = secrets.token_urlsafe(16)
     token_str = f"{username}:{random_part}"
     return base64.b64encode(token_str.encode()).decode()
-
-
-def require_auth(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        client_ip = request.remote_addr
-        _, _, allowed_ips = get_admin_credentials()
-        if client_ip not in allowed_ips:
-            response = make_response(f'IP {client_ip} 被拒绝访问', 403)
-            return response
-        if not session.get('authenticated'):
-            return redirect(url_for('admin.login'))
-        return f(*args, **kwargs)
-
-    return decorated
 
 
 @admin_bp.route('/')
@@ -279,6 +257,34 @@ def require_auth_except_sse(f):
     return decorated
 
 
+# v1.7.9: 登录速率限制（V-006修复）- 每IP每分钟最多5次尝试
+_login_attempts: dict = {}
+_login_lock = threading.Lock()
+
+def _check_login_rate(client_ip: str) -> tuple[bool, str]:
+    """检查登录速率限制。返回 (是否允许, 错误消息)"""
+    now = time.time()
+    window = 60  # 60秒窗口
+    max_attempts = 5  # 最多5次
+
+    with _login_lock:
+        # 清理过期记录
+        expired = [ip for ip, (_, ts) in _login_attempts.items() if now - ts > window]
+        for ip in expired:
+            del _login_attempts[ip]
+
+        count, first_ts = _login_attempts.get(client_ip, (0, now))
+        if now - first_ts > window:
+            # 窗口过期，重置
+            _login_attempts[client_ip] = (1, now)
+            return True, ""
+        elif count >= max_attempts:
+            remaining = int(window - (now - first_ts))
+            return False, f"登录尝试过于频繁，请 {remaining} 秒后重试"
+        else:
+            _login_attempts[client_ip] = (count + 1, first_ts)
+            return True, ""
+
 @admin_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'GET':
@@ -289,10 +295,20 @@ def login():
     password = request.form.get('password')
     expected_username, password_hash, allowed_ips = get_admin_credentials()
     client_ip = request.remote_addr
+
+    # V-006: 速率限制检查
+    allowed, rate_msg = _check_login_rate(client_ip)
+    if not allowed:
+        log_with_symbol("critical_permission", "critical", f"登录频率限制触发: {client_ip}")
+        return render_template('admin/login.html', error=rate_msg), 429
+
     if client_ip not in allowed_ips:
         log_with_symbol("critical_permission", "critical", f"登录IP被拒绝: {client_ip}")
         return render_template('admin/login.html', error=f"IP {client_ip} 被拒绝访问"), 403
     if username == expected_username and check_password_hash(password_hash, password):
+        # 登录成功：清除该IP的速率计数
+        with _login_lock:
+            _login_attempts.pop(client_ip, None)
         session['authenticated'] = True
         session['username'] = username
         session.permanent = current_app.config.get('SESSION_PERMANENT', False)

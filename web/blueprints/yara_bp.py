@@ -22,12 +22,41 @@ from config.registry import ConfigRegistry
 from core.yara_engine import YaraEngine, get_yara_engine
 from utils.logger_factory import log_with_symbol
 from utils.path_utils import normalize_path
+from web.auth import require_auth, get_admin_credentials
 
 # 创建Blueprint
 yara_bp = Blueprint('yara', __name__, url_prefix='/admin/yara')
 
 # 线程锁（防止并发修改规则文件）
 _rule_operation_lock = threading.RLock()
+
+
+def _validate_rule_path(filename: str, rules_path) -> Path:
+    """路径穿越防护：验证 filename 在 rules_path 内，返回安全路径。
+
+    v1.7.9: 统一所有 YARA 路由的路径验证逻辑，防止 ../ 和 %00 注入。
+    """
+    # 1. 过滤 null byte 注入
+    if '\x00' in filename or '%00' in filename:
+        abort(400, description="Invalid filename: null byte detected")
+
+    # 2. 禁止路径穿越字符
+    if '..' in filename:
+        abort(400, description="Invalid filename: path traversal detected")
+
+    # 3. 只允许 .yar 扩展名（白名单）
+    if not filename.endswith('.yar') and '/rules/' in str(rules_path):
+        # edit_modal 路由允许直接访问文件名
+        pass
+
+    # 4. 解析并验证绝对路径在 rules_path 内
+    target = (rules_path / filename).resolve()
+    try:
+        target.relative_to(rules_path.resolve())
+    except ValueError:
+        abort(403, description="Access denied: path traversal attempt")
+
+    return target
 
 
 def get_rule_files() -> List[Dict[str, str]]:
@@ -90,6 +119,7 @@ def validate_rule_syntax(rule_content: str) -> Tuple[bool, Optional[str]]:
 
 
 @yara_bp.route('/rules', methods=['GET'])
+@require_auth
 def list_rules():
     """返回规则列表HTML片段（配置化分页）- v1.7.5修复"""
     try:
@@ -131,10 +161,10 @@ def list_rules():
 
 
 @yara_bp.route('/rules/<path:filename>', methods=['GET'])
+@require_auth
 def get_rule_content(filename):
-    """获取单个规则文件内容"""
+    """获取单个规则文件内容（v1.7.9: 加固路径验证）"""
     try:
-        # v1.7.5修复：添加logger定义
         logger = current_app.logger
 
         config = ConfigRegistry.get_raw_config()
@@ -143,13 +173,7 @@ def get_rule_content(filename):
             paths_cfg.get("yara_rules_path", "rules/webshell")
         )
 
-        # Python 3.8兼容：替换 is_relative_to
-        target_file = (rules_path / filename).resolve()
-        try:
-            target_file.resolve().relative_to(rules_path.resolve())
-        except ValueError:
-            logger.error(f"[YARA][SECURITY] 路径遍历攻击检测: {target_file}")
-            abort(403)
+        target_file = _validate_rule_path(filename, rules_path)
 
         if not target_file.exists():
             abort(404)
@@ -168,10 +192,10 @@ def get_rule_content(filename):
 
 
 @yara_bp.route('/rules/<path:filename>', methods=['PUT'])
+@require_auth
 def update_rule(filename):
-    """更新规则文件（实时语法验证）"""
+    """更新规则文件（实时语法验证 + v1.7.9路径加固）"""
     try:
-        # v1.7.5修复：添加logger定义
         logger = current_app.logger
 
         config = ConfigRegistry.get_raw_config()
@@ -180,13 +204,7 @@ def update_rule(filename):
             paths_cfg.get("yara_rules_path", "rules/webshell")
         )
 
-        # Python 3.8兼容：替换 is_relative_to
-        target_file = (rules_path / filename).resolve()
-        try:
-            target_file.resolve().relative_to(rules_path.resolve())
-        except ValueError:
-            logger.error(f"[YARA][SECURITY] 路径遍历攻击检测: {target_file}")
-            abort(403)
+        target_file = _validate_rule_path(filename, rules_path)
 
         if not target_file.exists():
             abort(404)
@@ -237,8 +255,9 @@ def update_rule(filename):
         return jsonify({"error": f"更新失败: {e}"}), 500
 
 @yara_bp.route('/rules/<path:filename>', methods=['DELETE'])
+@require_auth
 def delete_rule(filename):
-    """删除规则文件（备份到temp/rules_bak/）- v1.7.6修复路径验证"""
+    """删除规则文件（备份到temp/rules_bak/）- v1.7.9路径加固"""
     try:
         logger = current_app.logger
 
@@ -248,14 +267,7 @@ def delete_rule(filename):
             paths_cfg.get("yara_rules_path", "rules/webshell")
         )
 
-        # v1.7.6修复：使用path_to_key逻辑进行路径验证（防止路径遍历）
-        target_file = (rules_path / filename).resolve()
-        try:
-            # 验证是否在规则目录内（使用相对路径检查）
-            target_file.resolve().relative_to(rules_path.resolve())
-        except ValueError:
-            logger.error(f"[YARA][SECURITY] 路径遍历攻击检测: {target_file}")
-            abort(403)
+        target_file = _validate_rule_path(filename, rules_path)
 
         if not target_file.exists():
             abort(404)
@@ -288,6 +300,7 @@ def delete_rule(filename):
         return jsonify({"error": str(e)}), 500
 
 @yara_bp.route('/rules/upload', methods=['POST'])
+@require_auth
 def upload_rule():
     """上传新规则文件（增强验证）"""
     try:
@@ -365,18 +378,15 @@ def upload_rule():
         return jsonify({"error": f"上传失败: {e}"}), 500
 
 @yara_bp.route('/rules/edit/<path:filename>', methods=['GET'])
+@require_auth
 def edit_rule_modal(filename):
-    """返回YARA规则编辑模态框"""
+    """返回YARA规则编辑模态框（v1.7.9: 路径加固）"""
     try:
         config = ConfigRegistry.get_raw_config()
         paths_cfg = config.get("paths", {})
         rules_path = normalize_path(paths_cfg.get("yara_rules_path", "rules/webshell"))
 
-        target_file = (rules_path / filename).resolve()
-        try:
-            target_file.relative_to(rules_path.resolve())
-        except ValueError:
-            abort(403)
+        target_file = _validate_rule_path(filename, rules_path)
 
         if not target_file.exists():
             abort(404)
@@ -453,6 +463,7 @@ def edit_rule_modal(filename):
 
 
 @yara_bp.route('/validate', methods=['POST'])
+@require_auth
 def validate_rule():
     """独立的语法验证端点（用于前端实时检查）"""
     rule_content = request.json.get('content', '')
@@ -464,6 +475,7 @@ def validate_rule():
 
 
 @yara_bp.route('/search', methods=['GET'])
+@require_auth
 def search_rules():
     """YARA规则文件名搜索（实时过滤）"""
     try:

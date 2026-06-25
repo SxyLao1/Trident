@@ -88,6 +88,8 @@ def create_app() -> Flask:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+        # v1.7.9: V-005修复 — 隐藏服务器指纹
+        response.headers.pop('Server', None)
         return response
 
     # 注册Blueprint
