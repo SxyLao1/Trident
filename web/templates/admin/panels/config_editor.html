@@ -19,7 +19,7 @@
         <span style="color:#00ff41; font-weight:bold;">[{{ sec_name }}]</span>
         <span style="color:#555; font-size:10px;">{{ fields|length }} fields</span>
       </div>
-      <div class="cfg-section-body" style="display:none;">
+      <div class="cfg-section-body">
         {% for f in fields %}
         <div class="cfg-field" data-field="{{ sec_name }}.{{ f.key }}" style="padding:3px 12px; padding-left:{{ 36 + indent }}px; display:flex; align-items:center; gap:8px;">
           <span style="color:#ccc; min-width:160px;">{{ f.key }}</span>
@@ -60,7 +60,7 @@
       <h4 style="color:#00ff41; margin:0; font-size:13px; flex:1;">.env File</h4>
       <span style="color:#666; font-size:10px;">sensitive credentials</span>
     </div>
-    <div class="config-section-body" style="display:none; padding:14px; background:#0a0a0a; border:1px solid #1a1a1a; border-top:none; border-radius:0 0 4px 4px; display:flex; flex-direction:column; gap:14px;">
+    <div class="config-section-body" style="padding:14px; background:#0a0a0a; border:1px solid #1a1a1a; border-top:none; border-radius:0 0 4px 4px; flex-direction:column; gap:14px; overflow:visible;">
 
       <!-- Password Hash row -->
       <div style="display:flex; align-items:center; gap:8px;">
@@ -129,7 +129,8 @@
 .cfg-section:not(.collapsed) .cfg-arrow { transform:rotate(0deg); display:inline-block; }
 .cfg-info { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; border:1px solid #555; color:#555; font-size:9px; font-weight:bold; cursor:help; position:relative; flex-shrink:0; }
 .cfg-info:hover { border-color:#00ff41; color:#00ff41; }
-.cfg-info:hover::after { content:attr(data-tooltip); position:absolute; bottom:120%; left:50%; transform:translateX(-50%); background:#1a1a1a; color:#ccc; border:1px solid #00ff41; padding:4px 8px; font-size:10px; font-weight:normal; white-space:nowrap; border-radius:3px; z-index:10; pointer-events:none; }
+.cfg-info:hover::after { content:attr(data-tooltip); position:absolute; bottom:120%; left:50%; transform:translateX(-50%); background:#1a1a1a; color:#ccc; border:1px solid #00ff41; padding:4px 8px; font-size:10px; font-weight:normal; white-space:nowrap; border-radius:3px; z-index:9999; pointer-events:none; }
+.config-section.collapsed .config-section-body { display:none; }
 .cfg-highlight { background:#0a1a0a; }
 </style>
 
