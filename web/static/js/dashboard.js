@@ -229,9 +229,9 @@ function loadContent(path, title) {
           htmx.trigger(el, 'load');
         });
       }
-      // Dashboard特殊处理
-      if (path === 'dashboard_content') {
-        setTimeout(loadDashboardPanels, 50);
+      // v1.8.2: Load block status if Profiles page
+      if (path === 'profiles') {
+        setTimeout(function() { if (typeof loadBlockStatus === 'function') loadBlockStatus(); }, 300);
       }
     })
     .catch(function(err) {

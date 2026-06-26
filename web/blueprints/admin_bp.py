@@ -746,7 +746,8 @@ def dashboard_content():
         total = len(all_records)
         quarantined = quarantine_stats.get("quarantined", 0)
         false_positives = sum(1 for r in all_records if r.get("marked_false_positive", False))
-        protection_rate = round((quarantined / total * 100), 1) if total > 0 else 0.0
+        # v1.8.2: quarantine stats 含历史数据可能 > registry total，cap at 100%
+        protection_rate = round((min(quarantined, total) / total * 100), 1) if total > 0 else 0.0
 
         # 最近5条检测事件
         recent = []
