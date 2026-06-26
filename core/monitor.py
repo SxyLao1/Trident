@@ -512,6 +512,17 @@ class FileMonitorHandler(FileSystemEventHandler):
                     # Step 1: 注册到Registry（从scanner移至此，确保不遗漏）
                     add(event_path, scan_result.features)
 
+                    # v1.8.1: 喂给画像引擎
+                    try:
+                        from core.threat_graph import get_threat_graph
+                        get_threat_graph().ingest_registry_entry({
+                            "file_path": str(event_path),
+                            "features": scan_result.features,
+                            "detected_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                        })
+                    except Exception:
+                        pass
+
                     # Step 2: 检查恢复白名单 → 跳过隔离
                     if is_recently_restored(str(event_path)):
                         self.logger.info(f"[QUARANTINE] 跳过刚恢复文件: {event_path.name}")
@@ -721,6 +732,16 @@ class FileMonitorHandler(FileSystemEventHandler):
                                             f"{dest_path.name} | 引擎: {result.engine}", self.logger)
                             # 注册
                             add(dest_path, result.features)
+                            # v1.8.1: 画像引擎
+                            try:
+                                from core.threat_graph import get_threat_graph
+                                get_threat_graph().ingest_registry_entry({
+                                    "file_path": str(dest_path),
+                                    "features": result.features,
+                                    "detected_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                })
+                            except Exception:
+                                pass
                             # 隔离
                             qr = quarantine_file(str(dest_path), result.features[0] if result.features else "unknown", result.features, str(dest_path))
                             if qr:
