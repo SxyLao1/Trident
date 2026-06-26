@@ -463,6 +463,14 @@ def profiles_list():
                 q in p.tool_signature.lower() or
                 any(q in ip for ip in p.ip_pool)]
 
+        # Sort
+        sort = request.args.get('sort', 'risk')  # risk | time | traffic
+        if sort == 'time':
+            all_profiles.sort(key=lambda p: p.last_seen or datetime.min, reverse=True)
+        elif sort == 'traffic':
+            all_profiles.sort(key=lambda p: len(p.ip_pool) + len(p.target_urls), reverse=True)
+        # default: already sorted by risk_score from get_active_profiles()
+
         # Pagination
         per_page = 20
         page = max(1, request.args.get('page', 1, type=int))

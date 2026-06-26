@@ -7,6 +7,15 @@
            hx-get="/admin/profiles" hx-trigger="keyup changed delay:400ms"
            hx-target="#main-content" hx-swap="innerHTML">
     <span style="font-size:11px; color:#888;">{{ total }} total</span>
+    <button class="btn btn-ghost btn-sm" style="font-size:10px;"
+            hx-get="/admin/profiles?sort=risk{% if query %}&q={{ query }}{% endif %}"
+            hx-target="#main-content" hx-swap="innerHTML">Risk</button>
+    <button class="btn btn-ghost btn-sm" style="font-size:10px;"
+            hx-get="/admin/profiles?sort=time{% if query %}&q={{ query }}{% endif %}"
+            hx-target="#main-content" hx-swap="innerHTML">Time</button>
+    <button class="btn btn-ghost btn-sm" style="font-size:10px;"
+            hx-get="/admin/profiles?sort=traffic{% if query %}&q={{ query }}{% endif %}"
+            hx-target="#main-content" hx-swap="innerHTML">Traffic</button>
     <button class="btn btn-ghost btn-sm" onclick="htmx.ajax('GET','/admin/profiles',{target:'#main-content',swap:'innerHTML'})">Refresh</button>
   </div>
   <div id="profiles-list" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">

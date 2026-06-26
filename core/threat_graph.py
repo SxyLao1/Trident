@@ -156,11 +156,13 @@ class ThreatGraph:
         """提取 URL 路径模式，去掉具体文件名和参数"""
         if not url:
             return "/"
-        # Remove query string
-        path = url.split('?')[0]
-        # Replace numeric IDs with {id}
         import re as _re
-        path = _re.sub(r'/\d+', '/{id}', path)
+        path = url.split('?')[0]
+        # Normalize filename-embedded numbers: upload_0.jsp → upload_{id}.{script}
+        path = _re.sub(r'_\d+\.', '_{id}.', path)
+        # Normalize path-segment numbers: /123/ → /{id}/
+        path = _re.sub(r'/\d+/', '/{id}/', path)
+        path = _re.sub(r'/\d+$', '/{id}', path)
         # Normalize file extension patterns
         path = _re.sub(r'\.(php|jsp|asp|aspx|jspx)', '.{script}', path)
         return path
