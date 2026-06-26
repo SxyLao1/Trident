@@ -698,10 +698,36 @@ def profile_detail_page(profile_id):
                     "last_seen": profile.last_seen,
                 })
 
+        # v1.8.3: 获取该画像关联文件的聚类信息
+        file_clusters = []
+        try:
+            from core.similarity.file_cluster import get_file_cluster_engine
+            ce = get_file_cluster_engine()
+            for fp in list(profile.target_files)[:20]:
+                cluster = ce.get_cluster(fp)
+                if cluster:
+                    file_clusters.append({
+                        "file": fp.rsplit(chr(92), 1)[-1].rsplit('/', 1)[-1],
+                        "cluster_id": cluster.cluster_id,
+                        "cluster_size": cluster.size,
+                        "samples": cluster.sample_files,
+                    })
+            # Deduplicate by cluster_id
+            seen_cids = set()
+            unique_clusters = []
+            for fc in file_clusters:
+                if fc["cluster_id"] not in seen_cids:
+                    seen_cids.add(fc["cluster_id"])
+                    unique_clusters.append(fc)
+            file_clusters = unique_clusters
+        except Exception:
+            pass
+
         return render_template('admin/profile_detail.html',
             profile=profile, ip_details=ip_details,
             ip_page=ip_page, ip_total_pages=ip_total_pages, ip_total=ip_total,
-            events=list(profile.attack_chain)[-50:])
+            events=list(profile.attack_chain)[-50:],
+            file_clusters=file_clusters)
     except Exception as e:
         current_app.logger.error(f"[ADMIN] profile detail error: {e}", exc_info=True)
         return render_template('admin/error.html', error=str(e)), 500

@@ -78,6 +78,28 @@
     {% endif %}
   </div>
 
+  <!-- v1.8.3: File Clusters -->
+  {% if file_clusters %}
+  <div>
+    <h4 style="color:#00ff41; margin:0 0 8px 0;">FILE CLUSTERS ({{ file_clusters|length }})</h4>
+    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+      {% for fc in file_clusters %}
+      <div style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:8px 12px; font-size:11px; max-width:300px;">
+        <div style="color:#00ff41; margin-bottom:4px;">
+          <code style="font-size:10px;">{{ fc.cluster_id[:10] }}</code>
+          <span style="color:#888; margin-left:6px;">{{ fc.cluster_size }} files</span>
+        </div>
+        <div style="color:#666; font-size:10px; max-height:60px; overflow-y:auto;">
+          {% for s in fc.samples[:5] %}
+          <div>{{ s[:50] }}</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <!-- IP Table -->
   <div>
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
