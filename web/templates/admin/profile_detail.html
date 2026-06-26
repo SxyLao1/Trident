@@ -73,24 +73,120 @@
     {% endif %}
   </div>
 
-  <!-- IP Details -->
-  {% if ip_details %}
+  <!-- IP Table -->
   <div>
-    <h4 style="color:#00ff41; margin:0 0 8px 0;">ASSOCIATED IPs</h4>
-    <div style="display:flex; flex-wrap:wrap; gap:6px;">
-      {% for ipd in ip_details %}
-      <div style="background:#0a0a0a; border:1px solid #1a1a1a; padding:6px 10px; border-radius:3px; font-size:11px;">
-        <code style="color:#ccc;">{{ ipd.ip }}</code>
-        <span style="color:#888;margin-left:6px;">{{ ipd.event_count }} events</span>
-        <span style="color:{{ '#ff4444' if ipd.cluster_level >= 3 else '#ffaa00' if ipd.cluster_level >= 2 else '#888' }};margin-left:4px;">L{{ ipd.cluster_level }}</span>
-      </div>
-      {% endfor %}
-      {% if profile.ip_pool|length > 20 %}
-      <div style="background:#0a0a0a;border:1px solid #1a1a1a;padding:6px 10px;border-radius:3px;font-size:11px;color:#888;">
-        ... and {{ profile.ip_pool|length - 20 }} more IPs
-      </div>
-      {% endif %}
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+      <h4 style="color:#00ff41; margin:0;">ASSOCIATED IPs ({{ profile.ip_pool|length }})</h4>
+      <span style="flex:1;"></span>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="selectAllIPs()">Select All</button>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="copySelectedIPs()">Copy Selected</button>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="copyAllIPs()">Copy All</button>
+      <button class="btn btn-danger btn-sm" style="font-size:10px;" id="block-ips-btn" disabled
+              onclick="blockSelectedIPs()">Block Selected</button>
+    </div>
+    <div style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; max-height:300px; overflow-y:auto;">
+      <table style="width:100%; font-size:11px; border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:1px solid #1a1a1a; color:#888; font-size:10px; position:sticky; top:0; background:#0a0a0a;">
+            <th style="padding:6px 10px; width:30px; text-align:center;"><input type="checkbox" onchange="toggleAllIPs(this)"></th>
+            <th style="padding:6px 10px; text-align:left;">IP Address</th>
+            <th style="padding:6px 10px; text-align:right;">Events</th>
+            <th style="padding:6px 10px; text-align:right;">WAF Score</th>
+            <th style="padding:6px 10px; text-align:center;">Level</th>
+            <th style="padding:6px 10px; text-align:left;">First Seen</th>
+            <th style="padding:6px 10px; text-align:left;">Last Seen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ipd in ip_details %}
+          <tr class="ip-row" style="border-bottom:1px solid #111; cursor:pointer;"
+              onclick="toggleIPRow(this)" data-ip="{{ ipd.ip }}">
+            <td style="padding:4px 10px; text-align:center;">
+              <input type="checkbox" class="ip-checkbox" value="{{ ipd.ip }}" onclick="event.stopPropagation();updateBlockBtn()">
+            </td>
+            <td style="padding:4px 10px;">
+              <code style="color:#ccc; font-size:10px;" class="ip-addr">{{ ipd.ip }}</code>
+              <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:0 4px;margin-left:4px;"
+                      onclick="event.stopPropagation();copyIP('{{ ipd.ip }}')" title="Copy IP">Copy</button>
+            </td>
+            <td style="padding:4px 10px; text-align:right; color:#ccc;">{{ ipd.event_count }}</td>
+            <td style="padding:4px 10px; text-align:right; color:{{ '#ff4444' if ipd.waf_score_avg > 0.9 else '#ffaa00' if ipd.waf_score_avg > 0.7 else '#00ff41' }};">{{ "%.2f"|format(ipd.waf_score_avg) }}</td>
+            <td style="padding:4px 10px; text-align:center;">
+              <span style="color:{{ '#ff4444' if ipd.cluster_level >= 3 else '#ffaa00' if ipd.cluster_level >= 2 else '#888' }};">
+                {{ ipd.cluster_level }}
+              </span>
+            </td>
+            <td style="padding:4px 10px; color:#888; font-size:10px;">{{ ipd.first_seen.strftime('%m-%d %H:%M') if ipd.first_seen else 'N/A' }}</td>
+            <td style="padding:4px 10px; color:#888; font-size:10px;">{{ ipd.last_seen.strftime('%m-%d %H:%M') if ipd.last_seen else 'N/A' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </div>
-  {% endif %}
+
+<script>
+var _selectedIPs = new Set();
+
+function toggleIPRow(row) {
+  var cb = row.querySelector('.ip-checkbox');
+  cb.checked = !cb.checked;
+  if (cb.checked) _selectedIPs.add(cb.value);
+  else _selectedIPs.delete(cb.value);
+  updateBlockBtn();
+}
+
+function toggleAllIPs(master) {
+  document.querySelectorAll('.ip-checkbox').forEach(function(cb) {
+    cb.checked = master.checked;
+    if (master.checked) _selectedIPs.add(cb.value);
+    else _selectedIPs.delete(cb.value);
+  });
+  updateBlockBtn();
+}
+
+function selectAllIPs() {
+  document.querySelectorAll('.ip-checkbox').forEach(function(cb) {
+    cb.checked = true; _selectedIPs.add(cb.value);
+  });
+  updateBlockBtn();
+}
+
+function updateBlockBtn() {
+  var btn = document.getElementById('block-ips-btn');
+  var count = document.querySelectorAll('.ip-checkbox:checked').length;
+  btn.disabled = count === 0;
+  btn.textContent = 'Block ' + (count > 0 ? count : 'Selected') + ' IP' + (count !== 1 ? 's' : '');
+}
+
+function copyIP(ip) {
+  navigator.clipboard.writeText(ip).then(function() {
+    // Brief visual feedback
+  });
+}
+
+function copySelectedIPs() {
+  var ips = Array.from(document.querySelectorAll('.ip-checkbox:checked')).map(function(cb) { return cb.value; });
+  if (ips.length === 0) { ips = Array.from(document.querySelectorAll('.ip-addr')).map(function(el) { return el.textContent.trim(); }); }
+  navigator.clipboard.writeText(ips.join('\n'));
+}
+
+function copyAllIPs() {
+  var ips = Array.from(document.querySelectorAll('.ip-addr')).map(function(el) { return el.textContent.trim(); });
+  navigator.clipboard.writeText(ips.join('\n'));
+}
+
+function blockSelectedIPs() {
+  var ips = Array.from(document.querySelectorAll('.ip-checkbox:checked')).map(function(cb) { return cb.value; });
+  if (ips.length === 0) return;
+  if (!confirm('Block ' + ips.length + ' IP' + (ips.length > 1 ? 's' : '') + '?\n\n' + ips.join('\n'))) return;
+  fetch('/api/v1/blocklist/add', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
+    body: JSON.stringify({ips: ips, profile_id: '{{ profile.profile_id }}'})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    alert(d.message || 'Blocked');
+  });
+}
+</script>
 </div>

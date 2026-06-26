@@ -542,9 +542,9 @@ def profile_detail_page(profile_id):
         if not profile:
             return render_template('admin/error.html', error="Profile not found"), 404
 
-        # IP reputation details
+        # IP reputation details (all IPs, not just first 20)
         ip_details = []
-        for ip in list(profile.ip_pool)[:20]:
+        for ip in sorted(profile.ip_pool):
             rep = graph.query_ip(ip)
             if rep:
                 ip_details.append({
@@ -552,6 +552,15 @@ def profile_detail_page(profile_id):
                     "event_count": rep.event_count,
                     "waf_score_avg": round(rep.waf_score_avg, 2),
                     "cluster_level": rep.cluster_level,
+                    "first_seen": rep.first_seen,
+                    "last_seen": rep.last_seen,
+                })
+            else:
+                ip_details.append({
+                    "ip": ip, "event_count": 0, "waf_score_avg": 0,
+                    "cluster_level": 0,
+                    "first_seen": profile.created_at,
+                    "last_seen": profile.last_seen,
                 })
 
         return render_template('admin/profile_detail.html',
