@@ -1,56 +1,47 @@
-<!-- v1.8.1: Attacker Profiles -->
+<!-- v1.8.1: Attacker Profiles — server-rendered -->
 <div style="padding:16px; display:flex; flex-direction:column; gap:12px; height:100%;">
   <div style="display:flex; align-items:center; gap:12px;">
     <h3 style="color:#00ff41; margin:0; flex:1;">ATTACKER PROFILES</h3>
-    <span style="font-size:11px; color:#888;" id="profiles-total"></span>
-    <button class="btn btn-ghost btn-sm" onclick="loadProfiles()">Refresh</button>
+    <span style="font-size:11px; color:#888;">{{ profiles|length }} active profiles</span>
+    <button class="btn btn-ghost btn-sm" onclick="htmx.ajax('GET','/admin/profiles',{target:'#main-content',swap:'innerHTML'})">Refresh</button>
   </div>
   <div id="profiles-list" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
-    <div class="empty-state"><div class="spinner"></div><p>Loading profiles...</p></div>
+    {% if profiles %}
+    {% for p in profiles %}
+    {% set riskColor = '#ff4444' if p.risk_score > 80 else '#ffaa00' if p.risk_score > 50 else '#00ff41' %}
+    <div class="profile-card" onclick="loadContent('profiles/{{ p.profile_id }}','Profile')"
+         style="background:#0a0a0a;border:1px solid #1a1a1a;border-left:3px solid {{ riskColor }};padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:16px;">
+      <div style="flex:1;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <code style="color:#00ff41;font-size:12px;">{{ p.profile_id }}</code>
+          <span style="color:{{ '#00ff41' if p.status == 'active' else '#ffaa00' }};font-size:10px;">{{ p.status.upper() }}</span>
+        </div>
+        <div style="font-size:11px;color:#888;">
+          UA: <span style="color:#ccc;">{{ p.ua_fingerprint or 'unknown' }}</span> |
+          IPs: <span style="color:#ccc;">{{ p.ip_count }}</span> |
+          Files: <span style="color:#ccc;">{{ p.file_count }}</span> |
+          Last seen: <span style="color:#ccc;">{{ p.last_seen }}</span>
+        </div>
+        <div style="font-size:10px;color:#666;margin-top:2px;">Sample IPs: {{ p.sample_ips|join(', ') }}</div>
+      </div>
+      <div style="text-align:center;min-width:60px;">
+        <div style="font-size:24px;font-weight:bold;color:{{ riskColor }};">{{ p.risk_score|int }}</div>
+        <div style="font-size:9px;color:#888;">RISK</div>
+      </div>
+      <span style="color:#666;font-size:16px;">&gt;</span>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="empty-state" style="padding:60px;">
+      <p style="color:#888;">No active profiles yet</p>
+      <p style="color:#666;font-size:12px;margin-top:8px;">
+        Start the Mock WAF server and run a scenario, then check back.
+      </p>
+      <p style="color:#555;font-size:11px;margin-top:4px;">
+        <code>python tests/mock_waf_server.py --speed 120</code><br>
+        Open http://127.0.0.1:9999 and click Start
+      </p>
+    </div>
+    {% endif %}
   </div>
 </div>
-
-<script>
-function loadProfiles() {
-  fetch('/admin/profiles/data')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      var list = document.getElementById('profiles-list');
-      var total = document.getElementById('profiles-total');
-      if (total) total.textContent = data.total + ' profiles';
-      if (!data.profiles || data.profiles.length === 0) {
-        list.innerHTML = '<div class="empty-state"><p>No active profiles yet. Start a Mock WAF scenario and wait for events.</p></div>';
-        return;
-      }
-      var html = '';
-      data.profiles.forEach(function(p) {
-        var riskColor = p.risk_score > 80 ? '#ff4444' : p.risk_score > 50 ? '#ffaa00' : '#00ff41';
-        var statusBadge = p.status === 'active' ? '<span style="color:#00ff41;font-size:10px;">ACTIVE</span>' :
-                          p.status === 'dormant' ? '<span style="color:#ffaa00;font-size:10px;">DORMANT</span>' :
-                          '<span style="color:#666;font-size:10px;">EXPIRED</span>';
-        html += '<div class="profile-card" onclick="location.href=\'/admin/profiles/' + p.profile_id + '\'" style="background:#0a0a0a;border:1px solid #1a1a1a;border-left:3px solid ' + riskColor + ';padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:16px;">';
-        html += '<div style="flex:1;">';
-        html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
-        html += '<code style="color:#00ff41;font-size:12px;">' + p.profile_id + '</code>';
-        html += statusBadge;
-        html += '</div>';
-        html += '<div style="font-size:11px;color:#888;">';
-        html += 'UA: <span style="color:#ccc;">' + (p.ua_fingerprint || 'unknown') + '</span> | ';
-        html += 'IPs: <span style="color:#ccc;">' + p.ip_count + '</span> | ';
-        html += 'Files: <span style="color:#ccc;">' + p.file_count + '</span> | ';
-        html += 'Last seen: <span style="color:#ccc;">' + p.last_seen + '</span>';
-        html += '</div>';
-        html += '<div style="font-size:10px;color:#666;margin-top:2px;">Sample IPs: ' + (p.sample_ips||[]).join(', ') + '</div>';
-        html += '</div>';
-        html += '<div style="text-align:center;min-width:60px;">';
-        html += '<div style="font-size:24px;font-weight:bold;color:' + riskColor + ';">' + Math.round(p.risk_score) + '</div>';
-        html += '<div style="font-size:9px;color:#888;">RISK</div>';
-        html += '</div>';
-        html += '<span style="color:#666;font-size:16px;">&gt;</span>';
-        html += '</div>';
-      });
-      list.innerHTML = html;
-    });
-}
-loadProfiles();
-</script>

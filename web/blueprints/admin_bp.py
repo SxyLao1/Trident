@@ -448,9 +448,28 @@ def settings_env_save():
 @admin_bp.route('/profiles')
 @require_auth
 def profiles_list():
-    """v1.8.1: 画像列表页"""
+    """v1.8.1: 画像列表页 — 服务端渲染"""
     try:
-        return render_template('admin/profiles.html')
+        from core.threat_graph import get_threat_graph
+        graph = get_threat_graph()
+        profiles = graph.get_active_profiles(min_score=0.1)
+        # Enrich with display data
+        enriched = []
+        for p in profiles[:50]:
+            enriched.append({
+                "profile_id": p.profile_id,
+                "ua_fingerprint": p.ua_fingerprint,
+                "tool_signature": p.tool_signature,
+                "risk_score": round(p.risk_score * 100, 1),
+                "ip_count": len(p.ip_pool),
+                "file_count": len(p.target_files),
+                "url_count": len(p.target_urls),
+                "status": p.status,
+                "last_seen": p.last_seen.strftime("%Y-%m-%d %H:%M") if p.last_seen else "N/A",
+                "created_at": p.created_at.strftime("%Y-%m-%d %H:%M"),
+                "sample_ips": list(p.ip_pool)[:5],
+            })
+        return render_template('admin/profiles.html', profiles=enriched)
     except Exception as e:
         current_app.logger.error(f"[ADMIN] profiles error: {e}", exc_info=True)
         return render_template('admin/error.html', error=str(e)), 500
