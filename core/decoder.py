@@ -28,17 +28,20 @@ class WebShellDecoder:
     @staticmethod
     def decode(data: bytes) -> str:
         """
-        主入口：多轮迭代解码直到输出稳定。
+        主入口：多轮迭代解码，直接替换原始混淆字符串为明文。
+        这样 YARA 能直接匹配 eval( 而不是只看到解码注释。
         """
         text = data.decode('utf-8', errors='replace')
         prev = None
         decoded = text
         # Multi-pass: keep decoding until no more changes
-        for _ in range(5):  # Max 5 passes
+        for _ in range(5):
             decoded = WebShellDecoder._decode_pass(decoded)
             if decoded == prev:
                 break
             prev = decoded
+        # v1.8.3: inline replacement — restore eval($_POST) patterns
+        decoded = WebShellDecoder._inline_variable_call(decoded)
         return decoded
 
     @staticmethod
@@ -173,6 +176,32 @@ class WebShellDecoder:
                     text += f'\n// DECODED: array -> "{result}"\n'
             except (ValueError, OverflowError):
                 pass
+        return text
+
+    @staticmethod
+    def _inline_variable_call(text: str) -> str:
+        """关键步骤：$v=\"eval\"; $v($_POST) → eval($_POST)
+        解码后的字符串变量被调用时，替换为直接调用形式，让 YARA 能匹配 eval(、system( 等"""
+        # Find variable assignments to dangerous functions
+        dangerous = ['eval', 'assert', 'system', 'exec', 'passthru', 'shell_exec',
+                     'popen', 'proc_open', 'create_function', 'preg_replace',
+                     'base64_decode', 'file_get_contents', 'file_put_contents']
+        assignments = {}
+        for m in re.finditer(r'\$(\w+)\s*=\s*["\']([^"\']+)["\']\s*;', text):
+            var_name = m.group(1)
+            value = m.group(2).strip()
+            if any(d in value.lower() for d in dangerous):
+                assignments[var_name] = value
+
+        # Replace $var(...) with decoded_func(...)
+        for var_name, func_name in assignments.items():
+            # $var($x) → func_name($x)
+            text = re.sub(
+                r'\$' + re.escape(var_name) + r'\s*\(([^)]*)\)',
+                func_name + r'(\1)',
+                text
+            )
+
         return text
 
     @staticmethod
