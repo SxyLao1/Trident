@@ -184,6 +184,45 @@ def main():
     except Exception as e:
         _log('WARN', 'WAF', f'WAF event source unavailable: {e}')
 
+    # v1.8.1: 画像引擎初始化
+    from core.threat_graph import get_threat_graph
+    threat_graph = get_threat_graph()
+    _log('OK', 'PROFILE', 'ThreatGraph initialized')
+
+    # v1.8.1: 画像引擎消费 WAF 事件（后台线程从 JSONL 缓存读取）
+    def _profile_consumer_loop():
+        cache_path = normalize_path("data/waf_events.jsonl")
+        last_pos = 0
+        while True:
+            try:
+                if cache_path.exists():
+                    with open(cache_path, 'r', encoding='utf-8') as f:
+                        f.seek(last_pos)
+                        for line in f:
+                            if line.strip():
+                                evt = json.loads(line)
+                                threat_graph.ingest_waf_event(evt)
+                        last_pos = f.tell()
+            except Exception:
+                pass
+            time.sleep(5)  # Check for new events every 5s
+
+    consumer_thread = threading.Thread(target=_profile_consumer_loop, daemon=True, name="ProfileConsumer")
+    consumer_thread.start()
+    _log('OK', 'PROFILE', 'Profile consumer started')
+
+    # ── Profile persistence (every 5 minutes) ──
+    def _profile_persist_loop():
+        while True:
+            time.sleep(300)
+            try:
+                threat_graph.decay_profiles()
+                threat_graph.persist()
+            except Exception:
+                pass
+    persist_thread = threading.Thread(target=_profile_persist_loop, daemon=True, name="ProfilePersist")
+    persist_thread.start()
+
     # ═══════════════════════════════════════════════════════
     #  就绪汇总
     # ═══════════════════════════════════════════════════════
