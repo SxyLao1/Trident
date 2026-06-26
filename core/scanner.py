@@ -416,7 +416,29 @@ def quick_scan_yara(file_path: Path, scan_options: ScanOptions, logger: logging.
 
     # ===== 2. 扫描并统计（统一由ScannerChain处理）=====
     chain = get_scanner_chain(logger)
-    result = chain.scan(file_path)  # ← 内部会自动调用increment
+    result = chain.scan(file_path)
+
+    # ===== 2b. v1.8.3: 如果文件扫描未命中，尝试解码混淆代码后重新扫描 =====
+    if not result.is_suspicious:
+        try:
+            from core.decoder import WebShellDecoder
+            from core.yara_engine import get_yara_engine
+            raw_data = file_path.read_bytes()
+            if len(raw_data) < 5 * 1024 * 1024:
+                decoded = WebShellDecoder.decode(raw_data)
+                content = raw_data.decode('utf-8', errors='replace') + '\n' + decoded
+                yara_engine = get_yara_engine(logger)
+                if yara_engine.compiled_rules:
+                    matches = yara_engine.compiled_rules.match(data=content)
+                    if matches:
+                        features = [f"DECODED:{m.rule}" for m in matches]
+                        result = ScanResult(
+                            file_path=file_path, is_suspicious=True,
+                            features=features, score=0.85,
+                            engine="decoder+yara")
+                        logger.info(f"[DECODER] Hit after decode: {file_path.name} -> {', '.join(features[:3])}")
+        except Exception:
+            pass  # Decoder failed, use original scan result
 
     # ===== 3. 日志记录（v1.7.9: add()移到_do_scan统一管理，避免遗漏）=====
     if result.is_suspicious:
