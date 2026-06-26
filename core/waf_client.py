@@ -84,12 +84,22 @@ class WAFPoller:
         if self._running:
             return
         self._running = True
-        # v1.9.0: 加载目的IP过滤配置
+        # v1.9.0: 加载目的IP过滤配置（空=自动探测本机IP）
         try:
             cfg = ConfigRegistry.get_raw_config()
             self._dest_ips = cfg.get('waf_source', {}).get('dest_ips', [])
-            if self._dest_ips:
-                logger.info(f"[WAF_POLLER] Destination IP filter: {self._dest_ips}")
+            if not self._dest_ips:
+                # Auto-detect local non-loopback IPs
+                import socket
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    s.connect(('8.8.8.8', 80))
+                    local_ip = s.getsockname()[0]
+                    s.close()
+                    self._dest_ips = [local_ip, '127.0.0.1']
+                except Exception:
+                    self._dest_ips = ['127.0.0.1']
+            logger.info(f"[WAF_POLLER] Destination IP filter: {self._dest_ips}")
         except Exception:
             pass
         # 确定缓存文件路径
