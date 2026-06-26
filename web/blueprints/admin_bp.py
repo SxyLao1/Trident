@@ -448,14 +448,31 @@ def settings_env_save():
 @admin_bp.route('/profiles')
 @require_auth
 def profiles_list():
-    """v1.8.1: 画像列表页 — 服务端渲染"""
+    """v1.8.1: 画像列表页 — 服务端渲染 + 分页 + 搜索"""
     try:
         from core.threat_graph import get_threat_graph
         graph = get_threat_graph()
-        profiles = graph.get_active_profiles(min_score=0.1)
-        # Enrich with display data
+        all_profiles = graph.get_active_profiles(min_score=0.1)
+
+        # Search/filter
+        q = request.args.get('q', '').lower()
+        if q:
+            all_profiles = [p for p in all_profiles if
+                q in p.profile_id.lower() or
+                q in p.ua_fingerprint.lower() or
+                q in p.tool_signature.lower() or
+                any(q in ip for ip in p.ip_pool)]
+
+        # Pagination
+        per_page = 20
+        page = max(1, request.args.get('page', 1, type=int))
+        total = len(all_profiles)
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        start = (page - 1) * per_page
+        paginated = all_profiles[start:start + per_page]
+
         enriched = []
-        for p in profiles[:50]:
+        for p in paginated:
             enriched.append({
                 "profile_id": p.profile_id,
                 "ua_fingerprint": p.ua_fingerprint,
@@ -469,7 +486,8 @@ def profiles_list():
                 "created_at": p.created_at.strftime("%Y-%m-%d %H:%M"),
                 "sample_ips": list(p.ip_pool)[:5],
             })
-        return render_template('admin/profiles.html', profiles=enriched)
+        return render_template('admin/profiles.html', profiles=enriched,
+            page=page, total_pages=total_pages, total=total, query=q)
     except Exception as e:
         current_app.logger.error(f"[ADMIN] profiles error: {e}", exc_info=True)
         return render_template('admin/error.html', error=str(e)), 500

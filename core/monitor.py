@@ -512,13 +512,14 @@ class FileMonitorHandler(FileSystemEventHandler):
                     # Step 1: 注册到Registry（从scanner移至此，确保不遗漏）
                     add(event_path, scan_result.features)
 
-                    # v1.8.1: 喂给画像引擎
+                    # v1.8.1: 喂给画像引擎（日志无IP时用127.0.0.1）
                     try:
                         from core.threat_graph import get_threat_graph
                         get_threat_graph().ingest_registry_entry({
                             "file_path": str(event_path),
                             "features": scan_result.features,
                             "detected_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                            "first_seen_ip": "127.0.0.1",  # 本地文件检测无外网IP时用localhost
                         })
                     except Exception:
                         pass
@@ -739,6 +740,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                                     "file_path": str(dest_path),
                                     "features": result.features,
                                     "detected_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                    "first_seen_ip": "127.0.0.1",
                                 })
                             except Exception:
                                 pass
