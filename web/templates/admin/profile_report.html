@@ -69,7 +69,7 @@
 <h2>Detection Event Timeline</h2>
 {% if events %}
 <div class="timeline">
-  {% for evt in (events|reverse)[:50] %}
+  {% for evt in (events|reverse|list)[:50] %}
   <div class="tl-item">
     <div class="tl-dot"></div>
     <div class="tl-time">{{ evt.timestamp.strftime('%Y-%m-%d %H:%M:%S') if evt.timestamp else 'N/A' }}</div>
