@@ -427,6 +427,17 @@ function closeSystemModal() {
   m.classList.remove('active');
 }
 
+// v1.8.1: IP table operations (profile detail page)
+var _selectedIPs = new Set();
+function toggleIPRow(row) { var cb = row.querySelector('.ip-checkbox'); cb.checked = !cb.checked; if (cb.checked) _selectedIPs.add(cb.value); else _selectedIPs.delete(cb.value); updateBlockBtn(); }
+function toggleAllIPs(m) { document.querySelectorAll('.ip-checkbox').forEach(function(cb) { cb.checked = m.checked; if (m.checked) _selectedIPs.add(cb.value); else _selectedIPs.delete(cb.value); }); updateBlockBtn(); }
+function selectAllIPs() { document.querySelectorAll('.ip-checkbox').forEach(function(cb) { cb.checked = true; _selectedIPs.add(cb.value); }); updateBlockBtn(); }
+function updateBlockBtn() { var b = document.getElementById('block-ips-btn'); if (!b) return; var n = document.querySelectorAll('.ip-checkbox:checked').length; b.disabled = n === 0; b.textContent = 'Block ' + (n > 0 ? n : 'Selected') + ' IP' + (n !== 1 ? 's' : ''); }
+function copyIP(ip) { navigator.clipboard.writeText(ip); }
+function copySelectedIPs() { var ips = Array.from(document.querySelectorAll('.ip-checkbox:checked')).map(function(cb) { return cb.value; }); if (ips.length === 0) ips = Array.from(document.querySelectorAll('.ip-addr')).map(function(el) { return el.textContent.trim(); }); navigator.clipboard.writeText(ips.join('\n')); }
+function copyAllIPs() { var ips = Array.from(document.querySelectorAll('.ip-addr')).map(function(el) { return el.textContent.trim(); }); navigator.clipboard.writeText(ips.join('\n')); }
+function blockSelectedIPs() { var ips = Array.from(document.querySelectorAll('.ip-checkbox:checked')).map(function(cb) { return cb.value; }); if (ips.length === 0) return; if (!confirm('Block ' + ips.length + ' IPs?\n\n' + ips.join('\n'))) return; fetch('/api/v1/blocklist/add', { method: 'POST', headers: {'Content-Type':'application/json','X-CSRFToken':document.querySelector('meta[name="csrf-token"]')?.content||''}, body: JSON.stringify({ips:ips}) }).then(function(r){return r.json()}).then(function(d){alert(d.message||'Blocked')}); }
+
 // ESC key closes modals
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
