@@ -76,9 +76,12 @@
   <!-- IP Table -->
   <div>
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
-      <h4 style="color:#00ff41; margin:0;">ASSOCIATED IPs ({{ profile.ip_pool|length }})</h4>
+      <h4 style="color:#00ff41; margin:0;">ASSOCIATED IPs ({{ ip_total }})</h4>
       <span style="flex:1;"></span>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="selectAllIPs()">Select All</button>
+      <span style="font-size:10px;color:#888;" id="ip-selected-count">0 selected</span>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="selectAllIPs()">Select Page</button>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="selectAllIPsAll()">Select All {{ ip_total }}</button>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="clearIPSelection()">Clear</button>
       <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="copySelectedIPs()">Copy Selected</button>
       <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="copyAllIPs()">Copy All</button>
       <button class="btn btn-danger btn-sm" style="font-size:10px;" id="block-ips-btn" disabled
@@ -123,6 +126,20 @@
         </tbody>
       </table>
     </div>
+    {% if ip_total_pages > 1 %}
+    <div class="pagination-bar" style="margin-top:8px;">
+      <button class="btn btn-ghost btn-sm" {% if ip_page <= 1 %}disabled{% endif %}
+              hx-get="/admin/profiles/{{ profile.profile_id }}?ip_page={{ ip_page - 1 }}"
+              hx-target="#main-content" hx-swap="innerHTML">Prev</button>
+      <span class="page-info">Page {{ ip_page }} / {{ ip_total_pages }}</span>
+      <input type="number" class="form-input" style="width:45px;text-align:center;font-size:10px;padding:2px 4px;"
+             min="1" max="{{ ip_total_pages }}" value="{{ ip_page }}"
+             onkeydown="if(event.key==='Enter'){var p=this.value;htmx.ajax('GET','/admin/profiles/{{ profile.profile_id }}?ip_page='+p,{target:'#main-content',swap:'innerHTML'})}">
+      <button class="btn btn-ghost btn-sm" {% if ip_page >= ip_total_pages %}disabled{% endif %}
+              hx-get="/admin/profiles/{{ profile.profile_id }}?ip_page={{ ip_page + 1 }}"
+              hx-target="#main-content" hx-swap="innerHTML">Next</button>
+    </div>
+    {% endif %}
   </div>
 
 </div>

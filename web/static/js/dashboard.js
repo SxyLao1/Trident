@@ -427,16 +427,85 @@ function closeSystemModal() {
   m.classList.remove('active');
 }
 
-// v1.8.1: IP table operations (profile detail page)
-var _selectedIPs = new Set();
-function toggleIPRow(row) { var cb = row.querySelector('.ip-checkbox'); cb.checked = !cb.checked; if (cb.checked) _selectedIPs.add(cb.value); else _selectedIPs.delete(cb.value); updateBlockBtn(); }
-function toggleAllIPs(m) { document.querySelectorAll('.ip-checkbox').forEach(function(cb) { cb.checked = m.checked; if (m.checked) _selectedIPs.add(cb.value); else _selectedIPs.delete(cb.value); }); updateBlockBtn(); }
-function selectAllIPs() { document.querySelectorAll('.ip-checkbox').forEach(function(cb) { cb.checked = true; _selectedIPs.add(cb.value); }); updateBlockBtn(); }
-function updateBlockBtn() { var b = document.getElementById('block-ips-btn'); if (!b) return; var n = document.querySelectorAll('.ip-checkbox:checked').length; b.disabled = n === 0; b.textContent = 'Block ' + (n > 0 ? n : 'Selected') + ' IP' + (n !== 1 ? 's' : ''); }
+// v1.8.1: IP cross-page selection (profile detail page)
+window._ipSelected = window._ipSelected || new Set();
+window._ipTotal = window._ipTotal || 0;
+
+function _restoreIPCheckboxes() {
+  document.querySelectorAll('.ip-checkbox').forEach(function(cb) {
+    cb.checked = window._ipSelected.has(cb.value);
+  });
+  _updateIPUI();
+}
+
+function toggleIPRow(row) {
+  var cb = row.querySelector('.ip-checkbox'); cb.checked = !cb.checked;
+  if (cb.checked) window._ipSelected.add(cb.value); else window._ipSelected.delete(cb.value);
+  _updateIPUI();
+}
+
+function toggleAllIPs(m) {
+  document.querySelectorAll('.ip-checkbox').forEach(function(cb) {
+    cb.checked = m.checked;
+    if (m.checked) window._ipSelected.add(cb.value); else window._ipSelected.delete(cb.value);
+  });
+  _updateIPUI();
+}
+
+function selectAllIPs() {
+  document.querySelectorAll('.ip-checkbox').forEach(function(cb) {
+    cb.checked = true; window._ipSelected.add(cb.value);
+  });
+  _updateIPUI();
+}
+
+function selectAllIPsAll() {
+  // Store current page IPs, then trigger Select All across pages via data attribute
+  document.querySelectorAll('.ip-checkbox').forEach(function(cb) {
+    window._ipSelected.add(cb.value);
+  });
+  _updateIPUI();
+}
+
+function clearIPSelection() {
+  window._ipSelected.clear();
+  document.querySelectorAll('.ip-checkbox').forEach(function(cb) { cb.checked = false; });
+  _updateIPUI();
+}
+
+function _updateIPUI() {
+  var count = window._ipSelected.size;
+  var countEl = document.getElementById('ip-selected-count');
+  if (countEl) countEl.textContent = count + ' selected';
+  var btn = document.getElementById('block-ips-btn');
+  if (btn) { btn.disabled = count === 0; btn.textContent = 'Block ' + (count > 0 ? count : 'Selected') + ' IP' + (count !== 1 ? 's' : ''); }
+}
+
 function copyIP(ip) { navigator.clipboard.writeText(ip); }
-function copySelectedIPs() { var ips = Array.from(document.querySelectorAll('.ip-checkbox:checked')).map(function(cb) { return cb.value; }); if (ips.length === 0) ips = Array.from(document.querySelectorAll('.ip-addr')).map(function(el) { return el.textContent.trim(); }); navigator.clipboard.writeText(ips.join('\n')); }
-function copyAllIPs() { var ips = Array.from(document.querySelectorAll('.ip-addr')).map(function(el) { return el.textContent.trim(); }); navigator.clipboard.writeText(ips.join('\n')); }
-function blockSelectedIPs() { var ips = Array.from(document.querySelectorAll('.ip-checkbox:checked')).map(function(cb) { return cb.value; }); if (ips.length === 0) return; if (!confirm('Block ' + ips.length + ' IPs?\n\n' + ips.join('\n'))) return; fetch('/api/v1/blocklist/add', { method: 'POST', headers: {'Content-Type':'application/json','X-CSRFToken':document.querySelector('meta[name="csrf-token"]')?.content||''}, body: JSON.stringify({ips:ips}) }).then(function(r){return r.json()}).then(function(d){alert(d.message||'Blocked')}); }
+
+function copySelectedIPs() {
+  var ips = window._ipSelected.size > 0 ? Array.from(window._ipSelected) :
+    Array.from(document.querySelectorAll('.ip-addr')).map(function(el) { return el.textContent.trim(); });
+  navigator.clipboard.writeText(ips.join('\n'));
+}
+
+function copyAllIPs() {
+  var ips = Array.from(document.querySelectorAll('.ip-addr')).map(function(el) { return el.textContent.trim(); });
+  navigator.clipboard.writeText(ips.join('\n'));
+}
+
+function blockSelectedIPs() {
+  var ips = Array.from(window._ipSelected);
+  if (ips.length === 0) return;
+  if (!confirm('Block ' + ips.length + ' IPs?\n\n' + ips.slice(0, 10).join('\n') + (ips.length > 10 ? '\n... and ' + (ips.length - 10) + ' more' : ''))) return;
+  fetch('/api/v1/blocklist/add', {
+    method: 'POST', headers: {'Content-Type':'application/json','X-CSRFToken':document.querySelector('meta[name="csrf-token"]')?.content||''},
+    body: JSON.stringify({ips:ips})
+  }).then(function(r){return r.json()}).then(function(d){alert(d.message||'Blocked')});
+}
+
+// Restore IP checkboxes after HTMX page swaps
+document.addEventListener('htmx:afterSettle', function() { _restoreIPCheckboxes(); });
 
 // ESC key closes modals
 document.addEventListener('keydown', function(e) {

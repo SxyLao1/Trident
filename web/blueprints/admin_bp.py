@@ -542,9 +542,17 @@ def profile_detail_page(profile_id):
         if not profile:
             return render_template('admin/error.html', error="Profile not found"), 404
 
-        # IP reputation details (all IPs, not just first 20)
+        # IP reputation (paginated, 30 per page)
+        all_ips = sorted(profile.ip_pool)
+        ip_total = len(all_ips)
+        ip_per_page = 30
+        ip_page = max(1, request.args.get('ip_page', 1, type=int))
+        ip_total_pages = max(1, (ip_total + ip_per_page - 1) // ip_per_page)
+        ip_start = (ip_page - 1) * ip_per_page
+        ip_paginated = all_ips[ip_start:ip_start + ip_per_page]
+
         ip_details = []
-        for ip in sorted(profile.ip_pool):
+        for ip in ip_paginated:
             rep = graph.query_ip(ip)
             if rep:
                 ip_details.append({
@@ -565,6 +573,7 @@ def profile_detail_page(profile_id):
 
         return render_template('admin/profile_detail.html',
             profile=profile, ip_details=ip_details,
+            ip_page=ip_page, ip_total_pages=ip_total_pages, ip_total=ip_total,
             events=list(profile.attack_chain)[-50:])
     except Exception as e:
         current_app.logger.error(f"[ADMIN] profile detail error: {e}", exc_info=True)

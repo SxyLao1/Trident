@@ -61,11 +61,14 @@
   {% if total_pages > 1 %}
   <div class="pagination-bar" style="margin-top:12px;">
     <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %}
-            hx-get="/admin/profiles?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}"
+            hx-get="/admin/profiles?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}"
             hx-target="#main-content" hx-swap="innerHTML">Prev</button>
     <span class="page-info">Page {{ page }} / {{ total_pages }} ({{ total }} total)</span>
+    <input type="number" class="form-input" style="width:55px;text-align:center;font-size:11px;padding:2px 4px;"
+           min="1" max="{{ total_pages }}" value="{{ page }}"
+           onkeydown="if(event.key==='Enter'){var p=this.value;var u='/admin/profiles?page='+p+'{% if query %}&q={{ query }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}';htmx.ajax('GET',u,{target:'#main-content',swap:'innerHTML'})}">
     <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %}
-            hx-get="/admin/profiles?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}"
+            hx-get="/admin/profiles?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}"
             hx-target="#main-content" hx-swap="innerHTML">Next</button>
   </div>
   {% endif %}
