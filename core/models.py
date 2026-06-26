@@ -14,6 +14,73 @@ from typing import List, Optional
 from utils.path_utils import normalize_path
 
 
+# ═══════════════════════════════════════════════════════════════
+# v1.8.3: 画像引擎数据模型（从 threat_graph.py 迁移至此后统一管理）
+# ═══════════════════════════════════════════════════════════════
+
+@dataclass
+class AttackEvent:
+    """单次攻击事件"""
+    timestamp: 'datetime'
+    event_type: str = ""
+    src_ip: str = ""
+    user_agent: str = ""
+    url: str = ""
+    file_path: str = ""
+    waf_rule_id: str = ""
+    waf_score: float = 0.0
+
+@dataclass
+class AttackerProfile:
+    """攻击者画像"""
+    profile_id: str
+    created_at: 'datetime'
+    updated_at: 'datetime'
+    ip_pool: set = field(default_factory=set)
+    target_files: set = field(default_factory=set)
+    target_urls: set = field(default_factory=set)
+    ua_fingerprint: str = ""
+    tool_signature: str = ""
+    file_pattern: str = ""
+    attack_chain: list = field(default_factory=list)
+    risk_score: float = 0.0
+    raw_score: float = 0.0
+    decay_factor: float = 1.0
+    last_decayed: Optional['datetime'] = None
+    last_seen: Optional['datetime'] = None
+    status: str = "active"
+    last_alert_sent: Optional['datetime'] = None
+    alert_cooldown_seconds: int = 60
+
+@dataclass
+class IPReputation:
+    """IP 信誉"""
+    ip: str
+    first_seen: 'datetime'
+    last_seen: 'datetime'
+    event_count: int = 0
+    unique_files: set = field(default_factory=set)
+    unique_urls: set = field(default_factory=set)
+    waf_score_avg: float = 0.0
+    reputation_score: float = 0.0
+    cluster_level: int = 0
+    profile_ids: set = field(default_factory=set)
+
+@dataclass
+class FileReputation:
+    """文件信誉"""
+    path: str
+    first_seen: 'datetime'
+    last_seen: 'datetime'
+    detection_count: int = 0
+    unique_ips: set = field(default_factory=set)
+    yara_rules: list = field(default_factory=list)
+    file_exists: bool = True
+    quarantine_id: Optional[str] = None
+    cluster_id: Optional[str] = None
+    profile_ids: set = field(default_factory=set)
+
+
 @dataclass
 class ScanOptions:
     """扫描策略配置"""
