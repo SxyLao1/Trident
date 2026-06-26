@@ -681,6 +681,9 @@ def profile_detail_page(profile_id):
             profile=profile, ip_details=ip_details,
             ip_page=ip_page, ip_total_pages=ip_total_pages, ip_total=ip_total,
             events=list(profile.attack_chain)[-50:])
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] profile detail error: {e}", exc_info=True)
+        return render_template('admin/error.html', error=str(e)), 500
 
 
 @admin_bp.route('/profiles/<profile_id>/report')
