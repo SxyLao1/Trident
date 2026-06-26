@@ -445,6 +445,78 @@ def settings_env_save():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@admin_bp.route('/profiles')
+@require_auth
+def profiles_list():
+    """v1.8.1: 画像列表页"""
+    try:
+        return render_template('admin/profiles.html')
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] profiles error: {e}", exc_info=True)
+        return render_template('admin/error.html', error=str(e)), 500
+
+
+@admin_bp.route('/profiles/data')
+@require_auth
+def profiles_data():
+    """v1.8.1: 画像数据 API"""
+    try:
+        from core.threat_graph import get_threat_graph
+        graph = get_threat_graph()
+        profiles = graph.get_active_profiles(min_score=0.1)
+        result = []
+        for p in profiles[:50]:  # top 50
+            result.append({
+                "profile_id": p.profile_id,
+                "ua_fingerprint": p.ua_fingerprint,
+                "tool_signature": p.tool_signature,
+                "risk_score": round(p.risk_score * 100, 1),
+                "ip_count": len(p.ip_pool),
+                "file_count": len(p.target_files),
+                "url_count": len(p.target_urls),
+                "status": p.status,
+                "last_seen": p.last_seen.strftime("%Y-%m-%d %H:%M") if p.last_seen else "N/A",
+                "created_at": p.created_at.strftime("%Y-%m-%d %H:%M"),
+                "sample_ips": list(p.ip_pool)[:5],
+                "sample_urls": list(p.target_urls)[:3],
+            })
+        return jsonify({"profiles": result, "total": len(profiles)})
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] profiles data error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_bp.route('/profiles/<profile_id>')
+@require_auth
+def profile_detail_page(profile_id):
+    """v1.8.1: 画像详情（攻击链时间线）"""
+    try:
+        from core.threat_graph import get_threat_graph
+        graph = get_threat_graph()
+        profile = graph.query_profile(profile_id)
+        if not profile:
+            return render_template('admin/error.html', error="Profile not found"), 404
+
+        # IP reputation details
+        ip_details = []
+        for ip in list(profile.ip_pool)[:20]:
+            rep = graph.query_ip(ip)
+            if rep:
+                ip_details.append({
+                    "ip": ip,
+                    "event_count": rep.event_count,
+                    "waf_score_avg": round(rep.waf_score_avg, 2),
+                    "cluster_level": rep.cluster_level,
+                })
+
+        return render_template('admin/profile_detail.html',
+            profile=profile, ip_details=ip_details,
+            events=list(profile.attack_chain)[-50:])
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] profile detail error: {e}", exc_info=True)
+        return render_template('admin/error.html', error=str(e)), 500
+
+
 @admin_bp.route('/settings/env/hash', methods=['POST'])
 @require_auth
 def settings_env_hash():
