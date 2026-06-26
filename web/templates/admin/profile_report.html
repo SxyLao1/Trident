@@ -91,7 +91,7 @@
 <table>
   <thead><tr><th>IP Address</th><th>Events</th><th>Cluster Level</th></tr></thead>
   <tbody>
-    {% for ip in list(profile.ip_pool)[:50] %}
+    {% for ip in (profile.ip_pool|list)[:50] %}
     <tr><td><code>{{ ip }}</code></td><td>—</td><td>—</td></tr>
     {% endfor %}
   </tbody>
