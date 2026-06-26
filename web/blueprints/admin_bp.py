@@ -480,7 +480,18 @@ def profiles_list():
         paginated = all_profiles[start:start + per_page]
 
         enriched = []
+        now = datetime.now()
         for p in paginated:
+            hours_ago = None
+            if p.last_seen:
+                hours_ago = round((now - p.last_seen).total_seconds() / 3600, 1)
+            # v1.8.3: 衰减可视化 — 动态状态计算
+            if p.status == "active":
+                if hours_ago and hours_ago > 1:
+                    p.status = "dormant"
+                if hours_ago and hours_ago > 24:
+                    p.status = "expired"
+
             enriched.append({
                 "profile_id": p.profile_id,
                 "ua_fingerprint": p.ua_fingerprint,
@@ -491,6 +502,7 @@ def profiles_list():
                 "url_count": len(p.target_urls),
                 "status": p.status,
                 "last_seen": p.last_seen.strftime("%Y-%m-%d %H:%M") if p.last_seen else "N/A",
+                "hours_ago": hours_ago,
                 "created_at": p.created_at.strftime("%Y-%m-%d %H:%M"),
                 "sample_ips": list(p.ip_pool)[:5],
             })
@@ -669,6 +681,62 @@ def profile_detail_page(profile_id):
             profile=profile, ip_details=ip_details,
             ip_page=ip_page, ip_total_pages=ip_total_pages, ip_total=ip_total,
             events=list(profile.attack_chain)[-50:])
+
+
+@admin_bp.route('/profiles/<profile_id>/report')
+@require_auth
+def profile_report(profile_id):
+    """v1.8.3: 攻击者画像报告（可打印 HTML）"""
+    try:
+        from core.threat_graph import get_threat_graph
+        graph = get_threat_graph()
+        profile = graph.query_profile(profile_id)
+        if not profile:
+            return render_template('admin/error.html', error="Profile not found"), 404
+
+        # MITRE ATT&CK mapping
+        mitre_tags = []
+        tool = profile.ua_fingerprint.lower()
+        attack_type = ""
+        if "antsword" in tool:
+            mitre_tags = [{"id": "T1505.003", "name": "Server Software Component: Web Shell", "tactic": "Persistence"},
+                          {"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access"},
+                          {"id": "T1071.001", "name": "Web Protocols", "tactic": "Command and Control"}]
+            attack_type = "WebShell Upload via AntSword"
+        elif "behinder" in tool:
+            mitre_tags = [{"id": "T1505.003", "name": "Server Software Component: Web Shell", "tactic": "Persistence"},
+                          {"id": "T1573.001", "name": "Encrypted Channel: Symmetric Cryptography", "tactic": "Command and Control"}]
+            attack_type = "Encrypted WebShell (Behinder/Godzilla)"
+        elif "sqlmap" in tool:
+            mitre_tags = [{"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access"},
+                          {"id": "T1505.003", "name": "Server Software Component: Web Shell", "tactic": "Persistence"}]
+            attack_type = "SQL Injection + WebShell Upload"
+        elif "python-requests" in tool:
+            mitre_tags = [{"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access"},
+                          {"id": "T1505.003", "name": "Server Software Component: Web Shell", "tactic": "Persistence"},
+                          {"id": "T1105", "name": "Ingress Tool Transfer", "tactic": "Command and Control"}]
+            attack_type = "Automated WebShell Deployment (Red Team Tool)"
+        else:
+            mitre_tags = [{"id": "T1505.003", "name": "Server Software Component: Web Shell", "tactic": "Persistence"}]
+            attack_type = "WebShell Attack"
+
+        # Disposal recommendations
+        recs = []
+        if len(profile.ip_pool) >= 10:
+            recs.append({"action": "Block IP Range", "detail": f"Consider blocking C-class subnet for {len(profile.ip_pool)} proxy IPs. Use WAF/FW to block all IPs listed below."})
+        if len(profile.target_files) > 0:
+            recs.append({"action": "Remove WebShell Files", "detail": f"Isolate or delete {len(profile.target_files)} detected web shell files from the server."})
+        recs.append({"action": "Investigate Entry Point", "detail": "Review WAF logs for the initial exploit that allowed file upload. Check for vulnerable plugins/CMS."})
+        recs.append({"action": "Rotate Credentials", "detail": "If the attacker gained credentials, rotate all passwords and API keys on the affected server."})
+        recs.append({"action": "Deploy Additional Monitoring", "detail": "Enable file integrity monitoring and consider deploying an endpoint detection agent."})
+
+        return render_template('admin/profile_report.html',
+            profile=profile, events=list(profile.attack_chain),
+            mitre_tags=mitre_tags, attack_type=attack_type, recs=recs,
+            generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"))
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] report error: {e}", exc_info=True)
+        return render_template('admin/error.html', error=str(e)), 500
     except Exception as e:
         current_app.logger.error(f"[ADMIN] profile detail error: {e}", exc_info=True)
         return render_template('admin/error.html', error=str(e)), 500

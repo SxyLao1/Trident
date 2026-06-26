@@ -3,6 +3,7 @@
   <div style="display:flex; align-items:center; gap:12px;">
     <a href="#" onclick="loadContent('profiles','Profiles');return false;" style="color:#00ff41; text-decoration:none; font-size:12px;">&larr; Back to Profiles</a>
     <span style="flex:1;"></span>
+    <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="window.open('/admin/profiles/{{ profile.profile_id }}/report','_blank')">Generate Report</button>
     <span class="badge badge-{{ 'danger' if profile.risk_score > 0.8 else 'warning' if profile.risk_score > 0.5 else 'safe' }}">
       {{ 'CRITICAL' if profile.risk_score > 0.8 else 'HIGH' if profile.risk_score > 0.5 else 'MEDIUM' }}
     </span>
