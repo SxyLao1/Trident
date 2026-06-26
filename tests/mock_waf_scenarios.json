@@ -1,0 +1,106 @@
+{
+  "scenarios": {
+    "proxy_scan": {
+      "name": "Proxy Pool Scan — AntSword",
+      "description": "1000 IPs using AntSword to scan /uploads/*.php over 2 hours. All share same UA = same profile.",
+      "duration_seconds": 7200,
+      "events_per_minute": 8,
+      "ip_pool_size": 1000,
+      "ip_pool_cidr": "10.{octet2}.{octet3}.{octet4}",
+      "user_agent": "AntSword/2.1.15",
+      "user_agent_sticky": true,
+      "http_methods": ["POST", "GET"],
+      "url_patterns": [
+        "/uploads/shell.php",
+        "/uploads/cmd.php",
+        "/uploads/admin.php",
+        "/uploads/config.php",
+        "/uploads/info.php"
+      ],
+      "waf_rule_ids": ["webshell_upload", "php_rce", "eval_attempt"],
+      "waf_score_range": [0.85, 0.98],
+      "attack_type": "webshell",
+      "burst_enabled": true,
+      "burst_frequency": 5,
+      "burst_multiplier": 8
+    },
+    "red_team_deploy": {
+      "name": "Red Team — Bulk Webshell Deploy",
+      "description": "3 red-team IPs deploy 200 slightly mutated JSP webshells in 10 minutes. Same tool fingerprint.",
+      "duration_seconds": 600,
+      "events_per_minute": 30,
+      "ip_pool_size": 3,
+      "ip_pool_cidr": "192.168.{octet3}.{octet4}",
+      "user_agent": "python-requests/2.28.0",
+      "user_agent_sticky": true,
+      "http_methods": ["POST", "PUT"],
+      "url_patterns": [
+        "/var/www/html/upload_{i}.jsp",
+        "/webapps/ROOT/cmd_{i}.jsp",
+        "/tomcat/webapps/shell_{i}.jsp"
+      ],
+      "variant_count": 200,
+      "waf_rule_ids": ["jsp_webshell", "file_upload", "rce_attempt"],
+      "waf_score_range": [0.90, 1.0],
+      "attack_type": "webshell",
+      "burst_enabled": true,
+      "burst_frequency": 3,
+      "burst_multiplier": 5
+    },
+    "apt_slow_burn": {
+      "name": "APT — Long-term C2 Beacon",
+      "description": "5 C2 IPs with Behinder 4.0 beacon, 1 event/min for 7 days. Ultra-low-and-slow.",
+      "duration_seconds": 604800,
+      "events_per_minute": 1,
+      "ip_pool_size": 5,
+      "ip_pool_cidr": "45.67.{octet3}.{octet4}",
+      "user_agent": "Mozilla/5.0 (Behinder/v4.0)",
+      "user_agent_sticky": true,
+      "http_methods": ["POST"],
+      "url_patterns": [
+        "/api/status",
+        "/api/execute",
+        "/api/heartbeat"
+      ],
+      "waf_rule_ids": ["c2_beacon", "encrypted_payload", "irregular_interval"],
+      "waf_score_range": [0.70, 0.95],
+      "attack_type": "c2",
+      "burst_enabled": false
+    },
+    "mixed_campaign": {
+      "name": "Full Campaign — SQLi + RCE + Webshell",
+      "description": "50 IPs running full attack chain over 1 hour: recon → SQLi → RCE → webshell upload.",
+      "duration_seconds": 3600,
+      "events_per_minute": 15,
+      "ip_pool_size": 50,
+      "ip_pool_cidr": "172.16.{octet3}.{octet4}",
+      "user_agent": "sqlmap/1.7",
+      "user_agent_sticky": false,
+      "user_agent_alt": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "http_methods": ["GET", "POST", "PUT"],
+      "url_patterns": [
+        "/login.php?id={i}",
+        "/search?q=test'+OR+1=1--",
+        "/admin/exec?cmd=whoami",
+        "/uploads/webshell_{i}.php"
+      ],
+      "waf_rule_ids": ["sqli_attempt", "rce_attempt", "webshell_upload", "scanner_detect"],
+      "waf_score_range": [0.60, 0.99],
+      "attack_type": "mixed",
+      "phases": [
+        {"name": "recon", "minutes": 15, "url_filters": ["login", "search", "admin"]},
+        {"name": "sqli", "minutes": 15, "url_filters": ["id=", "OR 1=1"]},
+        {"name": "rce", "minutes": 15, "url_filters": ["exec", "cmd="]},
+        {"name": "webshell", "minutes": 15, "url_filters": ["uploads", "webshell"]}
+      ],
+      "burst_enabled": true,
+      "burst_frequency": 10,
+      "burst_multiplier": 3
+    }
+  },
+  "defaults": {
+    "speed_multiplier": 60,
+    "port": 9999,
+    "max_events_per_poll": 200
+  }
+}
