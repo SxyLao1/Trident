@@ -172,7 +172,17 @@ def main():
     from core.metrics import get_metrics
     get_metrics().load_persisted()
     metrics = get_metrics()
-    _log('💾', 'OK', 'METRICS', 'Persisted metrics loaded')
+    _log('OK', 'METRICS', 'Persisted metrics loaded')
+
+    # v1.8.1: WAF 事件源接入（非阻塞，失败不影响核心功能）
+    try:
+        from core.waf_client import get_waf_poller
+        waf_poller = get_waf_poller()
+        if waf_poller:
+            waf_poller.start()
+            _log('OK', 'WAF', f'Event source started: {waf_poller.source.get_name()}')
+    except Exception as e:
+        _log('WARN', 'WAF', f'WAF event source unavailable: {e}')
 
     # ═══════════════════════════════════════════════════════
     #  就绪汇总

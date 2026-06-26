@@ -31,6 +31,19 @@ session_permanent = false      # 关闭浏览器自动过期
 sse_max_clients_per_ip = 5          # 单个IP最大连接数（默认5）
 sse_max_total_clients = 20          # 全局最大连接数（默认20）
 
+# ============================================================================
+# v1.8.1: WAF 事件源配置（画像引擎数据来源）
+# ============================================================================
+[waf_source]
+# 是否启用 WAF 事件接入
+enabled = false  # 开发时手动开启
+# 事件源类型：mock（本地Mock WAF）| chaitin（长亭）| aliyun（阿里云盾）
+type = "mock"
+# Mock WAF 地址
+url = "http://127.0.0.1:9999"
+# 轮询间隔（秒）
+poll_interval = 10
+
 [security]
 csrf_enabled = true  # v1.7.1新增：CSRF开关
 csrf_exclude_paths = ["/api/v1/health"]  # 排除健康检查
