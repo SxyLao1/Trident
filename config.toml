@@ -80,6 +80,13 @@ auto_block_min_score = 0.8   # 触发自动封禁的最低风险分 (0.0-1.0)
 name = "Stdout Logger"
 type = "stdout"
 
+# ============================================================================
+# v1.9.0: 隔离总开关（测试时可关闭，避免文件被移走）
+# ============================================================================
+[quarantine]
+# 是否自动隔离检测到的WebShell（false=仅记录不移动文件）
+auto_quarantine_enabled = true
+
 [security]
 csrf_enabled = true  # v1.7.1新增：CSRF开关
 csrf_exclude_paths = ["/api/v1/health"]  # 排除健康检查

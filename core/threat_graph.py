@@ -312,6 +312,11 @@ class ThreatGraph:
             # ── Cross-reference with IP table ─────────────────
             if ip in self._ip_table:
                 self._ip_table[ip].unique_files.add(file_path)
+                # v1.9.0: 如果该 IP 关联了画像，把文件也关联到画像
+                for pid in self._ip_table[ip].profile_ids:
+                    if pid in self._profiles:
+                        self._profiles[pid].target_files.add(file_path)
+                        self._profiles[pid].updated_at = ts
 
             # ── Find matching profiles by file path pattern ───
             matched_pid = None

@@ -524,8 +524,17 @@ class FileMonitorHandler(FileSystemEventHandler):
                     except Exception:
                         pass
 
-                    # Step 2: 检查恢复白名单 → 跳过隔离
-                    if is_recently_restored(str(event_path)):
+                    # Step 2: 检查隔离总开关
+                    quarantine_enabled = True
+                    try:
+                        from config.registry import ConfigRegistry
+                        quarantine_enabled = ConfigRegistry.get_raw_config().get('quarantine', {}).get('auto_quarantine_enabled', True)
+                    except Exception:
+                        pass
+
+                    if not quarantine_enabled:
+                        self.logger.info(f"[QUARANTINE] 总开关关闭，跳过隔离: {event_path.name}")
+                    elif is_recently_restored(str(event_path)):
                         self.logger.info(f"[QUARANTINE] 跳过刚恢复文件: {event_path.name}")
                     else:
                         # Step 3: 隔离文件

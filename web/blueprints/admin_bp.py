@@ -698,19 +698,30 @@ def profile_detail_page(profile_id):
                     "last_seen": profile.last_seen,
                 })
 
-        # v1.8.3: 获取该画像关联文件的聚类信息
+        # v1.9.0: 获取该画像关联文件的聚类信息 + 隔离状态
         file_clusters = []
         try:
             from core.similarity.file_cluster import get_file_cluster_engine
+            from core.quarantine import get_quarantine_list
             ce = get_file_cluster_engine()
-            for fp in list(profile.target_files)[:20]:
+            quarantined_map = {}
+            for q in get_quarantine_list(status="quarantined", limit=500):
+                orig = q.get('original_path', '')
+                if orig:
+                    quarantined_map[orig] = q.get('quarantine_path', '')
+            for fp in list(profile.target_files)[:30]:
                 cluster = ce.get_cluster(fp)
                 if cluster:
+                    is_quarantined = fp in quarantined_map
+                    q_path = quarantined_map.get(fp, '')
                     file_clusters.append({
                         "file": fp.rsplit(chr(92), 1)[-1].rsplit('/', 1)[-1],
+                        "full_path": fp,
                         "cluster_id": cluster.cluster_id,
                         "cluster_size": cluster.size,
                         "samples": cluster.sample_files,
+                        "quarantined": is_quarantined,
+                        "quarantine_path": q_path.rsplit(chr(92), 1)[-1].rsplit('/', 1)[-1] if q_path else '',
                     })
             # Deduplicate by cluster_id
             seen_cids = set()
