@@ -5,7 +5,37 @@
 
 ---
 
-## [1.8.0-dev] - 开发中
+## [1.8.3] - 2026-06-26
+
+### 新增
+- **攻击者画像引擎**：UA+时间窗口聚类、IP 池重叠自动合并、衰减可视化（红/黄/灰）
+- **文件相似度聚类**：三轨哈希引擎（ssdeep/py-tlsh/SimHash），80% 相似度阈值自动归簇
+- **WebShell 解码过滤器**：Unicode/Hex/char()/拼接/str_replace 多轮解码 + 变量内联替换
+- **IP 封禁模块**：多设备广播架构（stdout/mock/http），失败重试队列（指数退避），持久化
+- **Mock WAF 服务**：4 种攻击场景，时间压缩模拟，有状态增量事件轮询
+- **报告生成器**：可打印 HTML 报告，含 MITRE ATT&CK 标签 + 攻击检测时间线 + 处置建议
+- **WAF 事件桥**：抽象接口 + HTTP 客户端 + 后台轮询 + JSONL 缓存
+- **Log Analyzer**：全屏日志分析器，关键词+级别+模块+时间范围四维过滤
+- **动态 Config 编辑器**：树形层级、搜索定位、env 只读保护、.env 结构化编辑器
+- **Threats 标签页**：Active Threats / Quarantine / Audit Log 三标签合并
+- **YARA 批量操作**：跨页勾选、全选/清除、批量删除
+
+### 变更
+- 导航重构：6 项 → 5 项（Overview / Threats / Rules / Profiles / Settings）
+- LIVE LOG 历史日志直接从 monitor.log 读取
+- 页面工具栏回归内容区，header-center 预留给多站点选择器
+- 画像 ID 仅用 UA+时间（不再依赖 URL 模式）
+- URL 降级为画像 metadata，不参与聚类主键
+
+### 修复
+- 隔离管道 5 个关键 bug（异步竞态、原子写入缩进、file_size 时序等）
+- HTMX `<script>` 不执行问题全面修复
+- 6 个安全漏洞（认证绕过、路径穿越、信息泄露、速率限制）
+- 通知批量聚合避免邮件轰炸
+
+---
+
+## [1.7.9] - 2026-06-25
 
 ### 新增
 - 导航重构：6项→4项（Overview / Threats / Rules / Settings）

@@ -15,7 +15,7 @@
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/version-1.7.9-blue?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.8.3-blue?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/status-stable-success?style=flat-square" alt="Status">
   <img src="https://img.shields.io/badge/python-3.8%2B-green?style=flat-square&logo=python" alt="Python">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">

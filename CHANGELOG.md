@@ -63,6 +63,29 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.8.3] - 2026-06-26
+
+### Added
+- Attacker Profiling Engine: UA+time clustering, IP-overlap merge, decay visualization
+- File Similarity Clustering: 3-track hash engine (ssdeep/py-tlsh/SimHash)
+- WebShell Decoder Filter: Multi-pass deobfuscation before YARA scan
+- IP Blocker: Multi-device broadcast, retry queue with exponential backoff
+- Mock WAF Server: 4 scenarios, time-compressed, stateful polling
+- Report Generator: Printable HTML with MITRE ATT&CK + timeline
+- Log Analyzer: Full-screen 4-dimension filtering
+- Dynamic Config Editor: Tree view + search + .env editor
+- Threats Tabs + YARA Batch Operations
+
+### Changed
+- Navigation: 6 → 5 items (Overview/Threats/Rules/Profiles/Settings)
+- Profile ID: UA+time only, URL downgraded to metadata
+- LIVE LOG reads from monitor.log
+
+### Fixed
+- Quarantine pipeline 5 bugs, HTMX script execution, 6 security vulns
+
+---
+
 ## [1.7.8] - 2026-05-27
 
 ### Added
