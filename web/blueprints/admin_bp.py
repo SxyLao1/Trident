@@ -617,6 +617,27 @@ def blocklist_get():
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+@admin_bp.route('/clusters/stats')
+@require_auth
+def clusters_stats():
+    """v1.8.3: 文件聚类统计"""
+    try:
+        from core.similarity.file_cluster import get_file_cluster_engine
+        engine = get_file_cluster_engine()
+        stats = engine.get_stats()
+        # Top clusters
+        top = sorted(engine._clusters.values(), key=lambda c: c.size, reverse=True)[:10]
+        stats["top_clusters"] = [{
+            "cluster_id": c.cluster_id,
+            "size": c.size,
+            "samples": c.sample_files,
+            "created": c.created_at.strftime("%H:%M:%S"),
+        } for c in top if c.size > 1]
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_bp.route('/block/status')
 @require_auth
 def block_status():

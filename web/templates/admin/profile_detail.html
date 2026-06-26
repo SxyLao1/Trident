@@ -42,6 +42,10 @@
       <div style="color:#ccc;font-size:14px;">{{ profile.target_urls|length }}</div>
     </div>
     <div>
+      <div style="color:#888;font-size:10px;">FILE CLUSTERS</div>
+      <div style="color:#ccc;font-size:14px;" id="profile-cluster-count">—</div>
+    </div>
+    <div>
       <div style="color:#888;font-size:10px;">LAST SEEN</div>
       <div style="color:#ccc;font-size:14px;">{{ profile.last_seen.strftime('%m-%d %H:%M') if profile.last_seen else 'N/A' }}</div>
     </div>

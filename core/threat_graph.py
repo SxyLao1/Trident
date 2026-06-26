@@ -270,7 +270,7 @@ class ThreatGraph:
 
     def ingest_registry_entry(self, entry: Dict) -> Optional[str]:
         """
-        摄入一条 Registry 检测记录，更新文件信誉 + 关联画像。
+        摄入一条 Registry 检测记录，更新文件信誉 + 关联画像 + 文件相似度聚类。
         """
         with self._lock:
             file_path = entry.get("file_path", "")
@@ -278,6 +278,14 @@ class ThreatGraph:
             ip = entry.get("first_seen_ip") or "unknown"
             ts_str = entry.get("detected_at", "")
             has_qid = bool(entry.get("quarantine_id"))
+
+            # v1.8.3: 文件相似度聚类
+            cluster_id = None
+            try:
+                from core.similarity.file_cluster import get_file_cluster_engine
+                cluster_id, hash_val = get_file_cluster_engine().cluster_file(file_path)
+            except Exception:
+                pass
 
             try:
                 ts = datetime.fromisoformat(ts_str) if ts_str else datetime.now()
@@ -298,6 +306,8 @@ class ThreatGraph:
             fr.file_exists = entry.get("file_exists", True)
             if has_qid:
                 fr.quarantine_id = entry.get("quarantine_id")
+            if cluster_id:
+                fr.cluster_id = cluster_id  # v1.8.3
 
             # ── Cross-reference with IP table ─────────────────
             if ip in self._ip_table:
