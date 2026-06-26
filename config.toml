@@ -48,25 +48,37 @@ poll_interval = 10
 # v1.8.2: IP 封禁引擎
 # ============================================================================
 [ip_blocker]
-# 是否启用 IP 封禁模块
+# 总开关：是否启用 IP 封禁
 enabled = false
-# 是否自动封禁高危画像关联 IP（需人工确认风险）
-auto_block_enabled = false
-# 自动封禁最低风险分（0.0-1.0）
-auto_block_min_score = 0.8
 
-# 封禁设备列表——Trident 将封禁决策广播到所有已配置设备
-# 设备类型: stdout(日志) | mock(内存) | http(通用WAF/FW API)
+# 自动封禁：高危画像关联 IP 自动广播到所有设备（关闭则仅手动触发）
+# 建议：先在测试环境验证设备连通性，再开启
+auto_block_enabled = false
+auto_block_min_score = 0.8   # 触发自动封禁的最低风险分 (0.0-1.0)
+
+# ---- 封禁设备列表 ----
+# Trident 将封禁决策同时广播到下面所有设备。
+# 设备类型说明：
+#   stdout = 仅终端日志输出（默认，开发/演示用）
+#   mock   = 内存黑名单（测试用，重启丢失）
+#   http   = 通过 HTTP POST 对接真实 WAF/FW API
+#
+# 对接真实设备示例（取消注释并修改）：
+#   [[ip_blocker.devices]]
+#   name = "Production WAF"
+#   type = "http"
+#   url = "https://waf.company.com/api/block"      # WAF 封禁接口地址
+#   api_key = "${TRIDENT_WAF_API_KEY:-}"            # API 密钥从 .env 读取
+#
+# HTTP 设备请求格式（Trident 自动发送）：
+#   POST {url}
+#   Content-Type: application/json
+#   Authorization: Bearer {api_key}
+#   Body: {"ip":"1.2.3.4", "comment":"Trident: webshell upload (profile: a1b2c3d4)", "permanent":false, "duration":86400, "risk_score":0.95}
+
 [[ip_blocker.devices]]
 name = "Stdout Logger"
 type = "stdout"
-
-# 对接真实 WAF/FW 时取消注释并填入:
-# [[ip_blocker.devices]]
-# name = "Production WAF"
-# type = "http"
-# url = "https://waf.company.com/api/block"
-# api_key = "${TRIDENT_WAF_API_KEY:-}"
 
 [security]
 csrf_enabled = true  # v1.7.1新增：CSRF开关
