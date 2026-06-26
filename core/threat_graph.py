@@ -126,6 +126,35 @@ class ThreatGraph:
         self._ip_table: Dict[str, IPReputation] = {}
         self._file_table: Dict[str, FileReputation] = {}
         self._persist_path: Optional[Path] = None
+        self._management_ips: list = []
+        self._time_window: int = 4
+        self._load_config()
+
+    def _load_config(self):
+        """v1.9.0: 从 config.toml 加载画像参数"""
+        try:
+            from config.registry import ConfigRegistry
+            cfg = ConfigRegistry.get_raw_config()
+            self._management_ips = cfg.get('management', {}).get('ips', [])
+            self._time_window = cfg.get('profiling', {}).get('time_window_hours', 4)
+        except Exception:
+            pass
+
+    def _is_management_ip(self, ip: str) -> bool:
+        """检查是否管理IP——这些IP不参与画像但监控层仍会告警"""
+        if not ip:
+            return False
+        for entry in self._management_ips:
+            if '/' in entry:  # CIDR
+                try:
+                    import ipaddress
+                    if ipaddress.ip_address(ip) in ipaddress.ip_network(entry, strict=False):
+                        return True
+                except Exception:
+                    pass
+            if ip == entry:
+                return True
+        return False
 
     # ── Profile ID Generation ─────────────────────────────────
 
@@ -204,6 +233,10 @@ class ThreatGraph:
                 ts = datetime.fromisoformat(ts_str)
             except (ValueError, TypeError):
                 ts = datetime.now()
+
+            # v1.9.0: 管理IP不参与画像（监控层仍会告警）
+            if self._is_management_ip(ip):
+                return None
 
             # ── Update IP reputation ──────────────────────────
             if ip not in self._ip_table:

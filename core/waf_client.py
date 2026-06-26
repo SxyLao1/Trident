@@ -78,11 +78,20 @@ class WAFPoller:
         self._thread: Optional[threading.Thread] = None
         self._cache_path: Optional[Path] = None
         self._last_poll_time: Optional[datetime] = None
+        self._dest_ips: List[str] = []  # v1.9.0: 目的IP白名单过滤
 
     def start(self):
         if self._running:
             return
         self._running = True
+        # v1.9.0: 加载目的IP过滤配置
+        try:
+            cfg = ConfigRegistry.get_raw_config()
+            self._dest_ips = cfg.get('waf_source', {}).get('dest_ips', [])
+            if self._dest_ips:
+                logger.info(f"[WAF_POLLER] Destination IP filter: {self._dest_ips}")
+        except Exception:
+            pass
         # 确定缓存文件路径
         self._cache_path = normalize_path("data/waf_events.jsonl")
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)
