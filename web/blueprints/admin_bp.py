@@ -531,6 +531,80 @@ def profiles_data():
         return jsonify({"error": str(e)}), 500
 
 
+# ═══════════════════════════════════════════════════════════════
+# v1.8.2: IP Blocklist API
+# ═══════════════════════════════════════════════════════════════
+
+@admin_bp.route('/api/v1/blocklist/add', methods=['POST'])
+@require_auth
+def blocklist_add():
+    """封禁 IP 列表"""
+    try:
+        data = request.get_json()
+        ips = data.get('ips', [])
+        profile_id = data.get('profile_id', '')
+        reason = data.get('reason', 'Manual block from Trident')
+
+        if not ips:
+            return jsonify({"success": False, "message": "No IPs provided"}), 400
+
+        from core.ip_blocker import get_ip_blocker
+        blocker = get_ip_blocker()
+        results = blocker.block(ips, reason=reason, profile_id=profile_id)
+
+        success_count = sum(1 for r in results if r.success)
+        return jsonify({
+            "success": success_count > 0,
+            "message": f"Blocked {success_count}/{len(results)} across {len(blocker.devices)} device(s)",
+            "results": [{"device": r.device_name, "ip": r.ip, "success": r.success, "message": r.message} for r in results]
+        })
+    except Exception as e:
+        current_app.logger.error(f"[BLOCKLIST] add failed: {e}", exc_info=True)
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@admin_bp.route('/api/v1/blocklist/remove', methods=['POST'])
+@require_auth
+def blocklist_remove():
+    """解封 IP 列表"""
+    try:
+        data = request.get_json()
+        ips = data.get('ips', [])
+        if not ips:
+            return jsonify({"success": False, "message": "No IPs provided"}), 400
+
+        from core.ip_blocker import get_ip_blocker
+        blocker = get_ip_blocker()
+        results = blocker.unblock(ips)
+
+        success_count = sum(1 for r in results if r.success)
+        return jsonify({
+            "success": success_count > 0,
+            "message": f"Unblocked {success_count}/{len(results)}",
+            "results": [{"device": r.device_name, "ip": r.ip, "success": r.success} for r in results]
+        })
+    except Exception as e:
+        current_app.logger.error(f"[BLOCKLIST] remove failed: {e}", exc_info=True)
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@admin_bp.route('/api/v1/blocklist', methods=['GET'])
+@require_auth
+def blocklist_get():
+    """获取当前黑名单"""
+    try:
+        from core.ip_blocker import get_ip_blocker
+        blocker = get_ip_blocker()
+        return jsonify({
+            "blocklist": blocker.get_blocklist(),
+            "history": blocker.get_history(limit=20),
+            "auto_block_enabled": blocker._auto_block_enabled,
+            "device_count": len(blocker.devices),
+        })
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 @admin_bp.route('/profiles/<profile_id>')
 @require_auth
 def profile_detail_page(profile_id):

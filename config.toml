@@ -44,6 +44,30 @@ url = "http://127.0.0.1:9999"
 # 轮询间隔（秒）
 poll_interval = 10
 
+# ============================================================================
+# v1.8.2: IP 封禁引擎
+# ============================================================================
+[ip_blocker]
+# 是否启用 IP 封禁模块
+enabled = false
+# 是否自动封禁高危画像关联 IP（需人工确认风险）
+auto_block_enabled = false
+# 自动封禁最低风险分（0.0-1.0）
+auto_block_min_score = 0.8
+
+# 封禁设备列表——Trident 将封禁决策广播到所有已配置设备
+# 设备类型: stdout(日志) | mock(内存) | http(通用WAF/FW API)
+[[ip_blocker.devices]]
+name = "Stdout Logger"
+type = "stdout"
+
+# 对接真实 WAF/FW 时取消注释并填入:
+# [[ip_blocker.devices]]
+# name = "Production WAF"
+# type = "http"
+# url = "https://waf.company.com/api/block"
+# api_key = "${TRIDENT_WAF_API_KEY:-}"
+
 [security]
 csrf_enabled = true  # v1.7.1新增：CSRF开关
 csrf_exclude_paths = ["/api/v1/health"]  # 排除健康检查
