@@ -1,6 +1,6 @@
 [system]
-version = "1.8.1"
-release_date = "2026-06-26"
+version = "1.8.2-dev"
+release_date = "TBD"
 
 project_root = "." # 项目根目录（辅助配置）
 
