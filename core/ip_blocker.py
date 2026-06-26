@@ -34,6 +34,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from config.registry import ConfigRegistry
+from utils.path_utils import normalize_path
 
 logger = logging.getLogger("monitor.ip_blocker")
 
@@ -180,14 +181,29 @@ class HTTPDevice(BlockDevice):
 # IP Blocker Manager
 # ═══════════════════════════════════════════════════════════════
 
+@dataclass
+class RetryItem:
+    """重试队列条目"""
+    decision: BlockDecision
+    attempts: int = 0
+    max_attempts: int = 5
+    next_retry_at: float = 0.0  # Unix timestamp
+    last_error: str = ""
+
+
 class IPBlocker:
-    """IP 封禁管理器——广播到所有设备"""
+    """IP 封禁管理器——广播到所有设备 + 失败重试队列"""
 
     def __init__(self):
         self.devices: List[BlockDevice] = []
         self._auto_block_enabled = False
         self._auto_block_min_score = 0.8
         self._history: List[BlockResult] = []
+        self._retry_queue: List[RetryItem] = []
+        self._retry_thread: Optional[threading.Thread] = None
+        self._retry_running = False
+        self._retry_interval = 30  # base retry interval (seconds)
+        self._persist_path: Optional[str] = None
         self._lock = threading.Lock()
 
     def add_device(self, device: BlockDevice):
@@ -219,24 +235,156 @@ class IPBlocker:
 
     def block(self, ips: List[str], reason: str = "", profile_id: str = "",
               risk_score: float = 0.0, permanent: bool = False) -> List[BlockResult]:
-        """封禁 IP 列表，广播到所有设备"""
+        """封禁 IP 列表，广播到所有设备。失败自动入重试队列。"""
         results = []
         with self._lock:
             for ip in ips:
                 decision = BlockDecision(
                     ip=ip, reason=reason, profile_id=profile_id,
                     risk_score=risk_score, permanent=permanent)
+                all_ok = True
                 for device in self.devices:
                     try:
                         r = device.block(decision)
                         results.append(r)
                         self._history.append(r)
+                        if not r.success:
+                            all_ok = False
                     except Exception as e:
                         logger.warning(f"[BLOCK] {device.get_name()} failed: {e}")
                         results.append(BlockResult(
                             device_name=device.get_name(), success=False,
                             message=str(e), ip=ip))
+                        all_ok = False
+                # Any device failure → enqueue for retry
+                if not all_ok:
+                    self._enqueue_retry(decision)
         return results
+
+    def _enqueue_retry(self, decision: BlockDecision):
+        """入重试队列（指数退避）"""
+        now = time.time()
+        # Check if already queued for this IP
+        existing = [item for item in self._retry_queue if item.decision.ip == decision.ip]
+        if existing:
+            return
+        item = RetryItem(
+            decision=decision,
+            attempts=1,
+            next_retry_at=now + self._retry_interval,
+            last_error="Initial block failed")
+        self._retry_queue.append(item)
+        self._persist_retry_queue()
+        logger.info(f"[RETRY] Queued {decision.ip} for retry in {self._retry_interval}s")
+
+    def _retry_loop(self):
+        """后台重试线程"""
+        while self._retry_running:
+            time.sleep(10)
+            now = time.time()
+            retry_now = []
+            with self._lock:
+                for item in self._retry_queue[:]:
+                    if now >= item.next_retry_at:
+                        retry_now.append(item)
+                        self._retry_queue.remove(item)
+
+            for item in retry_now:
+                success = True
+                for device in self.devices:
+                    try:
+                        r = device.block(item.decision)
+                        if not r.success:
+                            success = False
+                            item.last_error = r.message
+                    except Exception as e:
+                        success = False
+                        item.last_error = str(e)
+
+                if success:
+                    logger.info(f"[RETRY] {item.decision.ip}: OK after {item.attempts} retries")
+                elif item.attempts < item.max_attempts:
+                    # Exponential backoff: 30s, 60s, 120s, 240s, 480s
+                    item.attempts += 1
+                    item.next_retry_at = now + (self._retry_interval * (2 ** (item.attempts - 1)))
+                    with self._lock:
+                        self._retry_queue.append(item)
+                    logger.warning(f"[RETRY] {item.decision.ip}: attempt {item.attempts}/{item.max_attempts}, next in {item.next_retry_at - now:.0f}s")
+                else:
+                    logger.error(f"[RETRY] {item.decision.ip}: FAILED after {item.max_attempts} attempts — abandoned")
+
+            self._persist_retry_queue()
+
+    def start_retry_worker(self, persist_path: str = None):
+        """启动重试后台线程"""
+        if persist_path:
+            self._persist_path = persist_path
+            self._load_retry_queue()
+        if self._retry_running:
+            return
+        self._retry_running = True
+        self._retry_thread = threading.Thread(target=self._retry_loop, daemon=True, name="BlockRetry")
+        self._retry_thread.start()
+        logger.info("[RETRY] Worker started")
+
+    def stop_retry_worker(self):
+        self._retry_running = False
+
+    def get_retry_queue_status(self) -> Dict:
+        """返回重试队列状态（前端展示用）"""
+        with self._lock:
+            return {
+                "pending": len(self._retry_queue),
+                "items": [{
+                    "ip": item.decision.ip,
+                    "reason": item.decision.reason,
+                    "attempts": item.attempts,
+                    "max_attempts": item.max_attempts,
+                    "next_retry_at": datetime.fromtimestamp(item.next_retry_at).strftime("%H:%M:%S"),
+                    "last_error": item.last_error,
+                } for item in self._retry_queue[:20]],
+            }
+
+    def _persist_retry_queue(self):
+        if not self._persist_path:
+            return
+        try:
+            data = [{
+                "ip": item.decision.ip, "reason": item.decision.reason,
+                "profile_id": item.decision.profile_id,
+                "attempts": item.attempts, "max_attempts": item.max_attempts,
+                "next_retry_at": item.next_retry_at, "last_error": item.last_error,
+            } for item in self._retry_queue]
+            tmp = self._persist_path + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(data, f)
+            import os
+            os.replace(tmp, self._persist_path)
+        except Exception:
+            pass
+
+    def _load_retry_queue(self):
+        if not self._persist_path:
+            return
+        import os
+        if not os.path.exists(self._persist_path):
+            return
+        try:
+            with open(self._persist_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            for d in data:
+                decision = BlockDecision(
+                    ip=d["ip"], reason=d.get("reason", ""),
+                    profile_id=d.get("profile_id", ""))
+                item = RetryItem(
+                    decision=decision, attempts=d.get("attempts", 0),
+                    max_attempts=d.get("max_attempts", 5),
+                    next_retry_at=d.get("next_retry_at", 0),
+                    last_error=d.get("last_error", ""))
+                self._retry_queue.append(item)
+            logger.info(f"[RETRY] Loaded {len(self._retry_queue)} pending items from disk")
+        except Exception as e:
+            logger.warning(f"[RETRY] Load failed: {e}")
 
     def unblock(self, ips: List[str]) -> List[BlockResult]:
         """解封 IP 列表"""
@@ -294,7 +442,10 @@ def get_ip_blocker() -> IPBlocker:
             cfg = ConfigRegistry.get_raw_config().get("ip_blocker", {})
             if cfg.get("enabled", False):
                 _blocker.configure(cfg)
-                logger.info(f"[IP_BLOCKER] Initialized with {len(_blocker.devices)} device(s)")
+                _blocker.start_retry_worker(
+                    persist_path=str(normalize_path("data/block_retry_queue.json"))
+                )
+                logger.info(f"[IP_BLOCKER] Initialized with {len(_blocker.devices)} device(s) + retry worker")
         except Exception as e:
             logger.warning(f"[IP_BLOCKER] Config load failed: {e}")
             _blocker.add_device(StdoutDevice())

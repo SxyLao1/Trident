@@ -504,8 +504,60 @@ function blockSelectedIPs() {
   }).then(function(r){return r.json()}).then(function(d){alert(d.message||'Blocked')});
 }
 
-// Restore IP checkboxes after HTMX page swaps
-document.addEventListener('htmx:afterSettle', function() { _restoreIPCheckboxes(); });
+// v1.8.2: Block status panel (Profiles page)
+function loadBlockStatus() {
+  fetch('/admin/block/status')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var panel = document.getElementById('block-status-panel');
+      if (!panel) return;
+      panel.style.display = '';
+      document.getElementById('bs-auto').textContent = 'Auto: ' + (d.auto_block_enabled ? 'ON (>' + (d.auto_block_min_score*100) + '%)' : 'OFF');
+      document.getElementById('bs-devices').textContent = 'Devices: ' + d.device_count;
+      document.getElementById('bs-queue').textContent = 'Queue: ' + (d.retry_queue?.pending || 0);
+      document.getElementById('bs-blocked').textContent = 'Blocked: ' + (d.blocklist?.length || 0);
+
+      // Render queue detail
+      var qlist = document.getElementById('block-queue-list');
+      if (qlist && d.retry_queue?.items?.length > 0) {
+        var html = '';
+        d.retry_queue.items.forEach(function(item) {
+          html += '<div style="padding:2px 0; border-bottom:1px solid #111;">' +
+            '<code style="color:#ffaa00;">' + item.ip + '</code>' +
+            ' retry ' + item.attempts + '/' + item.max_attempts +
+            ' next: ' + item.next_retry_at +
+            ' <span style="color:#666;">' + (item.last_error || '') + '</span></div>';
+        });
+        qlist.innerHTML = html;
+      } else if (qlist) {
+        qlist.innerHTML = '<span style="color:#666;">No pending retries</span>';
+      }
+
+      // History
+      if (d.history?.length > 0) {
+        var hlist = document.getElementById('block-queue-list');
+        if (hlist && !d.retry_queue?.items?.length) {
+          var hhtml = '<div style="color:#888;margin-top:4px;">Recent:</div>';
+          d.history.slice(-10).reverse().forEach(function(h) {
+            hhtml += '<div style="font-size:10px; color:' + (h.success ? '#888' : '#ff4444') + ';">' +
+              h.device + ': ' + h.ip + ' — ' + h.message + '</div>';
+          });
+          hlist.innerHTML = hhtml;
+        }
+      }
+    });
+}
+
+function toggleBlockDetail() {
+  var d = document.getElementById('block-detail');
+  if (d) d.style.display = d.style.display === 'none' ? '' : 'none';
+}
+
+// Load block status when Profiles page loads
+document.addEventListener('htmx:afterSettle', function(evt) {
+  _restoreIPCheckboxes();
+  if (document.getElementById('block-status-panel')) loadBlockStatus();
+});
 
 // ESC key closes modals
 document.addEventListener('keydown', function(e) {

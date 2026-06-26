@@ -605,6 +605,26 @@ def blocklist_get():
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+@admin_bp.route('/block/status')
+@require_auth
+def block_status():
+    """v1.8.2: 封禁状态面板数据"""
+    try:
+        from core.ip_blocker import get_ip_blocker
+        blocker = get_ip_blocker()
+        return jsonify({
+            "auto_block_enabled": blocker._auto_block_enabled,
+            "auto_block_min_score": blocker._auto_block_min_score,
+            "device_count": len(blocker.devices),
+            "devices": [d.get_name() for d in blocker.devices],
+            "retry_queue": blocker.get_retry_queue_status(),
+            "history": blocker.get_history(limit=20),
+            "blocklist": blocker.get_blocklist(),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_bp.route('/profiles/<profile_id>')
 @require_auth
 def profile_detail_page(profile_id):
