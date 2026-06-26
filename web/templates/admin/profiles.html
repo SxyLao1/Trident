@@ -18,14 +18,14 @@
             hx-target="#main-content" hx-swap="innerHTML">Traffic</button>
     <button class="btn btn-ghost btn-sm" onclick="htmx.ajax('GET','/admin/profiles',{target:'#main-content',swap:'innerHTML'})">Refresh</button>
   </div>
-  <!-- v1.8.2: Block Status Panel -->
-  <div id="block-status-panel" style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:10px 14px; display:none; font-size:11px;">
+  <!-- v1.8.2: Block Status Panel (server-rendered placeholder, JS updates values) -->
+  <div id="block-status-panel" style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:10px 14px; font-size:11px;">
     <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
       <span style="color:#00ff41; font-weight:bold;">BLOCK STATUS</span>
       <span id="bs-auto" style="color:#888;">Auto: OFF</span>
-      <span id="bs-devices" style="color:#888;">Devices: 0</span>
-      <span id="bs-queue" style="color:#888;">Queue: 0</span>
-      <span id="bs-blocked" style="color:#888;">Blocked: 0</span>
+      <span id="bs-devices" style="color:#888;">Devices: —</span>
+      <span id="bs-queue" style="color:#888;">Queue: —</span>
+      <span id="bs-blocked" style="color:#888;">Blocked: —</span>
       <span style="flex:1;"></span>
       <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="toggleBlockDetail()">Detail</button>
     </div>

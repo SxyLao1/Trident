@@ -511,7 +511,6 @@ function loadBlockStatus() {
     .then(function(d) {
       var panel = document.getElementById('block-status-panel');
       if (!panel) return;
-      panel.style.display = '';
       document.getElementById('bs-auto').textContent = 'Auto: ' + (d.auto_block_enabled ? 'ON (>' + (d.auto_block_min_score*100) + '%)' : 'OFF');
       document.getElementById('bs-devices').textContent = 'Devices: ' + d.device_count;
       document.getElementById('bs-queue').textContent = 'Queue: ' + (d.retry_queue?.pending || 0);
