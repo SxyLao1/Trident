@@ -212,11 +212,12 @@ def main():
     consumer_thread.start()
     _log('OK', 'PROFILE', 'Profile consumer started')
 
-    # ── Profile persistence (every 5 minutes) ──
+    # ── Profile persistence + merge (every 5 minutes) ──
     def _profile_persist_loop():
         while True:
             time.sleep(300)
             try:
+                threat_graph.merge_overlapping_profiles(min_overlap=3)
                 threat_graph.decay_profiles()
                 threat_graph.persist()
             except Exception:

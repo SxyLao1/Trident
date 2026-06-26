@@ -168,14 +168,20 @@ class ThreatGraph:
         return path
 
     def generate_profile_id(
-        self, ua: str, url: str, time_window_hours: int = 1
+        self, ua: str, time_window_hours: int = 4
     ) -> str:
-        """生成画像 ID：UA 指纹 + URL 模式 + 时间桶"""
+        """生成画像 ID：UA 指纹 + 时间桶
+
+        v1.8.1 fix: URL 不参与聚类主键——攻击者不会按 URL 命名规律行动。
+        URL 降级为画像 metadata，只显示给用户看。
+        文件内容相似度（ssdeep/tlsh）留给 v2.0 三轨哈希引擎。
+        """
         ua_norm = self._normalize_ua(ua)
-        url_norm = self._normalize_url(url)
         now = datetime.now()
-        time_bucket = now.strftime("%Y%m%d%H")  # hourly buckets
-        features = f"{ua_norm}|{url_norm}|{time_bucket}"
+        # 4-hour buckets: same attacker within a 4h window gets same profile
+        hour_block = now.hour // time_window_hours
+        time_bucket = now.strftime(f"%Y%m%d{hour_block:02d}")
+        features = f"{ua_norm}|{time_bucket}"
         return hashlib.sha256(features.encode()).hexdigest()[:16]
 
     # ── Event Ingestion ───────────────────────────────────────
@@ -221,7 +227,7 @@ class ThreatGraph:
                 ip_rep.cluster_level = 1
 
             # ── Find or create profile ────────────────────────
-            pid = self.generate_profile_id(ua, url)
+            pid = self.generate_profile_id(ua)
             if pid not in self._profiles:
                 self._profiles[pid] = AttackerProfile(
                     profile_id=pid,
@@ -342,6 +348,41 @@ class ThreatGraph:
             )
             pid = best.profile_id if best else ""
         return (ip_level, file_count, pid)
+
+    # ── IP Pool Merge ───────────────────────────────────────
+
+    def merge_overlapping_profiles(self, min_overlap: int = 3):
+        """合并 IP 池重叠的画像——同一攻击者使用多个 UA 时自动合并"""
+        merged = 0
+        pids = list(self._profiles.keys())
+        for i, pid1 in enumerate(pids):
+            if pid1 not in self._profiles:
+                continue
+            p1 = self._profiles[pid1]
+            for pid2 in pids[i + 1:]:
+                if pid2 not in self._profiles:
+                    continue
+                p2 = self._profiles[pid2]
+                overlap = p1.ip_pool & p2.ip_pool
+                if len(overlap) >= min_overlap:
+                    # Merge p2 into p1
+                    p1.ip_pool |= p2.ip_pool
+                    p1.target_files |= p2.target_files
+                    p1.target_urls |= p2.target_urls
+                    p1.attack_chain.extend(p2.attack_chain)
+                    p1.attack_chain.sort(key=lambda e: e.timestamp)
+                    p1.risk_score = max(p1.risk_score, p2.risk_score)
+                    p1.raw_score = max(p1.raw_score, p2.raw_score)
+                    p1.updated_at = datetime.now()
+                    # Update IP table references
+                    for ip in p2.ip_pool:
+                        if ip in self._ip_table:
+                            self._ip_table[ip].profile_ids.discard(pid2)
+                            self._ip_table[ip].profile_ids.add(pid1)
+                    del self._profiles[pid2]
+                    merged += 1
+        if merged:
+            log_with_symbol("notice", "info", f"[THREAT_GRAPH] Merged {merged} profiles by IP overlap")
 
     # ── Basic Decay ───────────────────────────────────────────
 
