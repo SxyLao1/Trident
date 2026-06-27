@@ -22,6 +22,16 @@
     </div>
   </div>
 
+  <!-- v1.8.4: Search bar -->
+  <div style="margin-bottom: 8px;">
+    <input type="text" class="form-input" style="width: 250px; font-size: 11px; padding: 4px 8px;"
+           placeholder="Search by filename or quarantine ID..."
+           hx-get="/admin/quarantine?status={{ current_status }}{% if compact %}&compact=1{% endif %}"
+           hx-trigger="keyup changed delay:400ms"
+           hx-target="#quarantine-list-container" hx-swap="outerHTML"
+           name="q">
+  </div>
+
   <div class="status-filter" style="margin-bottom: 16px;">
     <button class="btn btn-sm {% if current_status == 'all' %}btn-primary{% else %}btn-ghost{% endif %}"
             hx-get="/admin/quarantine?status=all{% if compact %}&compact=1{% endif %}"

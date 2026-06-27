@@ -1184,12 +1184,14 @@ def get_record_detail():
             display_name = file_path.split("\\")[-1].split("/")[-1]
             file_size = 0
 
-        # 检查是否已被隔离
+        # 检查是否已被隔离（v1.8.4: 完整路径匹配 + 文件名匹配）
         from core.quarantine import get_quarantine_list
-        quarantine_records = get_quarantine_list(status="quarantined")
+        quarantine_records = get_quarantine_list(status=None)  # 查所有状态
         quarantine_info = None
         for q in quarantine_records:
-            if q.get("original_path") == file_path:
+            q_orig = q.get("original_path", "")
+            # 精确匹配或文件名匹配
+            if q_orig == file_path or (q_orig and file_path and q_orig.endswith(file_path.rsplit(chr(92),1)[-1].rsplit('/',1)[-1])):
                 quarantine_info = q
                 break
 

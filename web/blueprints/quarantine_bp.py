@@ -37,6 +37,16 @@ def quarantine_list():
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
 
         all_records = get_quarantine_list(status=status if status != 'all' else None)
+
+        # v1.8.4: 搜索过滤
+        q = request.args.get('q', '').lower()
+        if q:
+            all_records = [r for r in all_records
+                if q in r.get('quarantine_id', '').lower()
+                or q in r.get('original_path', '').lower()
+                or q in r.get('quarantine_path', '').lower()
+                or q in r.get('rule_name', '').lower()]
+
         total = len(all_records)
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = min(page, total_pages)
