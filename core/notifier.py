@@ -528,3 +528,170 @@ def shutdown_notifier():
     if _notifier_instance:
         _notifier_instance._stop_alert_worker()
         _notifier_instance = None
+
+
+# ═══════════════════════════════════════════════════════════════
+# v1.8.4: 统一通知消息构建器（纯函数，不依赖实例状态）
+# ═══════════════════════════════════════════════════════════════
+
+def _ip_label(ip: str) -> str:
+    """给 IP 加上可读标签"""
+    if not ip:
+        return "未知"
+    if ip in ("127.0.0.1", "::1", "0:0:0:0:0:0:0:1"):
+        return f"{ip} (本机/内网)"
+    return ip
+
+
+def _disposition_block(status: dict) -> str:
+    """构建封禁处置状态行"""
+    auto = status.get("auto_block_enabled", False)
+    device_count = status.get("block_device_count", 0)
+    ip = status.get("first_seen_ip") or status.get("attacker_ip", "")
+
+    if auto and device_count > 0:
+        return (
+            f"IP封禁: 已自动封禁 ({device_count} 台设备)\n"
+            f"  被封禁IP: {ip}"
+        )
+    elif auto and device_count == 0:
+        return "IP封禁: 自动封禁已开启但无可用设备"
+    else:
+        return (
+            f"IP封禁: 已关闭自动封禁\n"
+            f"  可疑IP: {ip}\n"
+            f"  建议: 人工研判后在管理面板手动封禁"
+        )
+
+
+def _disposition_quarantine(status: dict) -> str:
+    """构建隔离处置状态行"""
+    auto = status.get("auto_quarantine_enabled", True)
+    qid = status.get("quarantine_id")
+    qpath = status.get("quarantine_path")
+
+    if qid and qpath:
+        return (
+            f"文件隔离: 已自动隔离\n"
+            f"  隔离ID: {qid}\n"
+            f"  隔离路径: {qpath}"
+        )
+    elif not auto:
+        return "文件隔离: 已关闭自动隔离（可手动在隔离管理页面操作）"
+    else:
+        reason = status.get("reason", "未知原因")
+        return f"文件隔离: 隔离失败（{reason}）"
+
+
+def format_alert_message(context: dict) -> str:
+    """
+    v1.8.4: 统一构建告警通知消息。
+
+    支持的 alert_type:
+        - "local_detection":  本地文件系统检测到可疑文件
+        - "webshell_access":  WebShell 被 HTTP 访问
+        - "quarantine_batch": 批量隔离完成
+        - "quarantine_single": 单文件隔离成功
+        - "quarantine_failed": 隔离失败
+        - "quarantine_skipped": 隔离被跳过（开关关闭/白名单）
+
+    Returns: 格式化的纯文本告警消息（无 emoji，纯 ASCII）
+    """
+    alert_type = context.get("alert_type", "unknown")
+    ts = context.get("timestamp", "")
+    level = context.get("level", "WARNING")
+    status = context  # 直接传整个 context 给子函数
+
+    # -- 公共头部 --
+    header = f"[Trident {level}] {ts}"
+
+    if alert_type == "local_detection":
+        body = (
+            f"[!!] 内网边界突破告警\n\n"
+            f"可疑文件在本地被检测到（无外网访问记录）\n\n"
+            f"文件路径: {context.get('file_path', '?')}\n"
+            f"检测引擎: {context.get('engine', '?')}\n"
+            f"匹配规则: {', '.join(context.get('features', [])[:5])}\n"
+            f"首次发现IP: {_ip_label(context.get('first_seen_ip', ''))}\n"
+            f"检测时间: {ts}"
+        )
+
+    elif alert_type == "webshell_access":
+        body = (
+            f"[WEB] WebShell 被外部访问\n\n"
+            f"文件路径: {context.get('file_path', '?')}\n"
+            f"攻击IP: {context.get('attacker_ip', '?')}\n"
+            f"告警级别: {context.get('alert_level', level)}\n"
+            f"访问时间: {ts}"
+        )
+
+    elif alert_type == "quarantine_batch":
+        count = context.get("batch_count", 0)
+        body = (
+            f"[BATCH] 批量隔离完成\n\n"
+            f"本次共隔离 {count} 个可疑文件\n"
+            f"完成时间: {ts}\n\n"
+            f"详情请登录管理面板查看 [威胁 -> 隔离管理]"
+        )
+
+    elif alert_type == "quarantine_single":
+        body = (
+            f"[OK] 文件已隔离\n\n"
+            f"文件路径: {context.get('file_path', '?')}\n"
+            f"检测引擎: {context.get('engine', '?')}\n"
+            f"匹配规则: {', '.join(context.get('features', [])[:5])}\n"
+            f"首次发现IP: {_ip_label(context.get('first_seen_ip', ''))}"
+        )
+
+    elif alert_type == "quarantine_failed":
+        body = (
+            f"[FAIL] 隔离失败\n\n"
+            f"文件路径: {context.get('file_path', '?')}\n"
+            f"检测引擎: {context.get('engine', '?')}\n"
+            f"匹配规则: {', '.join(context.get('features', [])[:5])}\n"
+            f"首次发现IP: {_ip_label(context.get('first_seen_ip', ''))}\n"
+            f"失败原因: {context.get('reason', '未知')}\n"
+            f"时间: {ts}"
+        )
+
+    elif alert_type == "quarantine_skipped":
+        reason = context.get("reason", "")
+        if reason == "auto_quarantine_disabled":
+            reason_text = "自动隔离总开关已关闭"
+        elif reason == "recently_restored":
+            reason_text = "文件刚被恢复，跳过隔离（30秒白名单）"
+        else:
+            reason_text = reason
+        body = (
+            f"[SKIP] 隔离已跳过\n\n"
+            f"文件路径: {context.get('file_path', '?')}\n"
+            f"检测引擎: {context.get('engine', '?')}\n"
+            f"匹配规则: {', '.join(context.get('features', [])[:5])}\n"
+            f"首次发现IP: {_ip_label(context.get('first_seen_ip', ''))}\n"
+            f"跳过原因: {reason_text}\n"
+            f"时间: {ts}"
+        )
+
+    else:
+        body = context.get("raw_message", f"未知告警类型: {alert_type}")
+
+    # -- 处置状态（仅适用于需要展示处置状态的类型） --
+    types_with_disposition = {
+        "local_detection", "webshell_access", "quarantine_single",
+        "quarantine_failed", "quarantine_skipped"
+    }
+    sep = "=============================="
+
+    if alert_type in types_with_disposition:
+        disposition = (
+            f"\n{sep}\n"
+            f"[处置状态]\n\n"
+            f"{_disposition_quarantine(status)}\n"
+            f"{_disposition_block(status)}\n"
+            f"{sep}"
+        )
+    else:
+        disposition = ""
+
+    divider = sep if alert_type in types_with_disposition else "-" * 48
+    return f"{header}\n{divider}\n{body}{disposition}"

@@ -109,7 +109,7 @@
   {% endif %}
 
   <!-- IP Table -->
-  <div>
+  <div id="ip-table-section" data-all-ips='{{ all_ips|tojson }}'>
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
       <h4 style="color:#00ff41; margin:0;">ASSOCIATED IPs ({{ ip_total }})</h4>
       <span style="flex:1;"></span>
@@ -140,7 +140,7 @@
           <tr class="ip-row" style="border-bottom:1px solid #111; cursor:pointer;"
               onclick="toggleIPRow(this)" data-ip="{{ ipd.ip }}">
             <td style="padding:4px 10px; text-align:center;">
-              <input type="checkbox" class="ip-checkbox" value="{{ ipd.ip }}" onclick="event.stopPropagation();updateBlockBtn()">
+              <input type="checkbox" class="ip-checkbox" value="{{ ipd.ip }}" onclick="event.stopPropagation();toggleIPCheckbox(this)">
             </td>
             <td style="padding:4px 10px;">
               <code style="color:#ccc; font-size:10px;" class="ip-addr">{{ ipd.ip }}</code>

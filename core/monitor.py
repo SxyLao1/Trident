@@ -343,8 +343,26 @@ class FileMonitorHandler(FileSystemEventHandler):
         except Exception as e:
             log_with_symbol("error_notifier_init", "error", f"初始化失败: {e}", self.logger)
 
+    def _get_system_status(self) -> dict:
+        """v1.8.4: 读取系统运行状态（供通知消息使用）"""
+        status = {
+            "auto_quarantine_enabled": True,
+            "auto_block_enabled": False,
+            "block_device_count": 0,
+        }
+        try:
+            from config.registry import ConfigRegistry
+            cfg = ConfigRegistry.get_raw_config()
+            status["auto_quarantine_enabled"] = cfg.get("quarantine", {}).get("auto_quarantine_enabled", True)
+            blocker_cfg = cfg.get("ip_blocker", {})
+            status["auto_block_enabled"] = blocker_cfg.get("auto_block_enabled", False)
+            status["block_device_count"] = len(blocker_cfg.get("devices", []))
+        except Exception:
+            pass
+        return status
+
     def _flush_batch_notify(self):
-        """v1.7.9: 发送聚合的批量隔离成功通知"""
+        """v1.8.4: 发送聚合的批量隔离成功通知（重构——使用统一消息构建器）"""
         if self._batch_notify_queued <= 0:
             return
         count = self._batch_notify_queued
@@ -352,10 +370,15 @@ class FileMonitorHandler(FileSystemEventHandler):
         self._batch_notify_last_flush = time.time()
         try:
             self._init_notifier()
-            self.notifier._safe_notify(
-                f"批量隔离完成\n已自动隔离 {count} 个WebShell文件",
-                level="INFO"
-            )
+            from core.notifier import format_alert_message
+            ctx = {
+                "alert_type": "quarantine_batch",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "batch_count": count,
+                "level": "INFO",
+            }
+            ctx.update(self._get_system_status())
+            self.notifier._safe_notify(format_alert_message(ctx), level="INFO")
             self.logger.info(f"[BATCH_NOTIFY] 聚合发送: {count} 条隔离成功")
         except Exception as e:
             self.logger.warning(f"[BATCH_NOTIFY] 发送失败: {e}")
@@ -509,8 +532,26 @@ class FileMonitorHandler(FileSystemEventHandler):
                     from core.suspicious_registry import add, mark_quarantined
                     from core.quarantine import is_recently_restored
 
-                    # Step 1: 注册到Registry（从scanner移至此，确保不遗漏）
-                    add(event_path, scan_result.features)
+                    # v1.8.4: 本地文件检测——无外网IP时使用127.0.0.1
+                    first_seen_ip = "127.0.0.1"
+
+                    # v1.8.4: 本地文件检测CRITICAL告警——内网边界突破风险
+                    self._init_notifier()
+                    from core.notifier import format_alert_message
+                    ctx = {
+                        "alert_type": "local_detection",
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "file_path": str(event_path),
+                        "engine": scan_result.engine,
+                        "features": scan_result.features,
+                        "first_seen_ip": first_seen_ip,
+                        "level": "CRITICAL",
+                    }
+                    ctx.update(self._get_system_status())
+                    self.notifier._safe_notify(format_alert_message(ctx), level="CRITICAL")
+
+                    # Step 1: 注册到Registry（从scanner移至此，确保不遗漏），传入IP
+                    add(event_path, scan_result.features, first_seen_ip=first_seen_ip, detection_source="passive")
 
                     # v1.8.1: 喂给画像引擎（日志无IP时用127.0.0.1）
                     try:
@@ -519,7 +560,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                             "file_path": str(event_path),
                             "features": scan_result.features,
                             "detected_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                            "first_seen_ip": "127.0.0.1",  # 本地文件检测无外网IP时用localhost
+                            "first_seen_ip": first_seen_ip,
                         })
                     except Exception:
                         pass
@@ -556,20 +597,48 @@ class FileMonitorHandler(FileSystemEventHandler):
                 except Exception as qe:
                     self.logger.warning(f"[QUARANTINE] 隔离失败: {event_path.name} | {qe}")
 
-                # v1.7.9: 智能通知策略
+                # v1.8.4: 智能通知策略（重构——感知系统状态）
                 self._init_notifier()
+                from core.notifier import format_alert_message
+                sys_status = self._get_system_status()
+
                 if quarantined:
                     # 隔离成功: 批量聚合
                     self._batch_notify_queued += 1
                     elapsed = time.time() - self._batch_notify_last_flush
                     if self._batch_notify_queued >= self._batch_notify_threshold or elapsed > 300:
                         self._flush_batch_notify()
-                elif not is_recently_restored(str(event_path)):
-                    # 隔离失败（非白名单跳过）→ 立即告警
-                    self.notifier._safe_notify(
-                        f"隔离失败！\n文件: {scan_result.file_path}\n规则: {', '.join(scan_result.features[:3])}",
-                        level="WARNING"
-                    )
+                elif is_recently_restored(str(event_path)):
+                    # 刚恢复的文件不告警（30秒白名单）
+                    pass
+                elif not quarantine_enabled:
+                    # 隔离总开关关闭 → skipped 通知
+                    ctx = {
+                        "alert_type": "quarantine_skipped",
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "file_path": str(event_path),
+                        "engine": scan_result.engine,
+                        "features": scan_result.features,
+                        "first_seen_ip": first_seen_ip,
+                        "reason": "auto_quarantine_disabled",
+                        "level": "WARNING",
+                    }
+                    ctx.update(sys_status)
+                    self.notifier._safe_notify(format_alert_message(ctx), level="WARNING")
+                else:
+                    # 隔离失败（文件不存在或其他原因）
+                    ctx = {
+                        "alert_type": "quarantine_failed",
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "file_path": str(event_path),
+                        "engine": scan_result.engine,
+                        "features": scan_result.features,
+                        "first_seen_ip": first_seen_ip,
+                        "reason": "文件可能已被删除或权限不足",
+                        "level": "WARNING",
+                    }
+                    ctx.update(sys_status)
+                    self.notifier._safe_notify(format_alert_message(ctx), level="WARNING")
 
         except Exception as e:
             log_with_symbol("error_scan", "error", f"{event_path}: {e}", self.logger)
@@ -741,7 +810,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                             log_with_symbol("scan_hit", "critical",
                                             f"{dest_path.name} | 引擎: {result.engine}", self.logger)
                             # 注册
-                            add(dest_path, result.features)
+                            add(dest_path, result.features, first_seen_ip="127.0.0.1")
                             # v1.8.1: 画像引擎
                             try:
                                 from core.threat_graph import get_threat_graph
@@ -762,12 +831,21 @@ class FileMonitorHandler(FileSystemEventHandler):
                                 if self._batch_notify_queued >= self._batch_notify_threshold:
                                     self._flush_batch_notify()
                             else:
-                                # 失败立即通知
+                                # v1.8.4: 失败立即通知（使用统一消息构建器）
                                 self._init_notifier()
-                                self.notifier._safe_notify(
-                                    f"隔离失败(改名文件)！\n文件: {dest_path}",
-                                    level="WARNING"
-                                )
+                                from core.notifier import format_alert_message
+                                ctx = {
+                                    "alert_type": "quarantine_failed",
+                                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                    "file_path": str(dest_path),
+                                    "engine": result.engine,
+                                    "features": result.features,
+                                    "first_seen_ip": "127.0.0.1",
+                                    "reason": "改名文件隔离失败（文件可能已被移动或删除）",
+                                    "level": "WARNING",
+                                }
+                                ctx.update(self._get_system_status())
+                                self.notifier._safe_notify(format_alert_message(ctx), level="WARNING")
                     except Exception as e:
                         log_with_symbol("error_scan", "error", f"{dest_path}: {e}", self.logger)
             else:

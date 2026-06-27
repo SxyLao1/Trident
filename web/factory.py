@@ -11,7 +11,7 @@ import logging
 import secrets
 from datetime import timedelta
 
-from flask import Flask
+from flask import Flask, request, session
 from typing import Optional
 from flask_session import Session
 from flask_wtf.csrf import CSRFProtect
@@ -101,6 +101,16 @@ def create_app() -> Flask:
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
         return response
+
+    # v1.9.0: 保护敏感静态文件 — 未登录用户无法访问 dashboard JS
+    @app.before_request
+    def protect_sensitive_static():
+        if request.path.startswith('/static/js/'):
+            if not session.get('authenticated'):
+                # 仅允许 login 页所需的 JS
+                allowed = ['/static/js/utils.js']
+                if request.path not in allowed:
+                    return ('Not Found', 404, {})  # 直接返回404，不通过 abort
 
     # 注册Blueprint
     from web.blueprints import register_blueprints

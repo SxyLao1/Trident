@@ -1,0 +1,119 @@
+<!-- v1.9.0: Active Manual Scanner -->
+<div style="display: flex; flex-direction: column; height: 100%; gap: 16px; padding: 16px;">
+  <h3 style="color: #00ff41; font-family: var(--font-mono); margin: 0; font-size: 15px;">
+    ◎ MANUAL SCANNER — Proactive WebShell Detection
+  </h3>
+
+  <!-- Scan Configuration -->
+  <div class="card" id="scan-config-card" style="display: flex; flex-direction: column;">
+    <div class="card-header"><span class="card-header-icon">◆</span> SCAN CONFIGURATION</div>
+    <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label style="color: #888; font-size: 11px; display: block; margin-bottom: 4px;">Target Directory</label>
+          <input type="text" id="scan-target-dir" class="form-input"
+                 value="{{ default_dir }}" style="width: 100%; font-family: var(--font-mono); font-size: 11px;">
+        </div>
+        <div>
+          <label style="color: #888; font-size: 11px; display: block; margin-bottom: 4px;">Extensions (comma-separated)</label>
+          <input type="text" id="scan-extensions" class="form-input"
+                 value="{{ default_extensions|join(', ') }}" style="width: 100%; font-family: var(--font-mono); font-size: 11px;">
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <label style="color: #ccc; font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="scan-recursive" checked> Include subdirectories
+        </label>
+        <span style="color: #555; font-size: 10px;">Excluded: {{ exclude_dirs|join(', ') }}</span>
+        <span style="flex: 1;"></span>
+        <button class="btn btn-primary" id="scan-start-btn" onclick="startScan()"
+                style="font-family: var(--font-mono); padding: 8px 24px;">
+          ▶ Start Scan
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress Card (hidden until scan starts) -->
+  <div class="card" id="scan-progress-card" style="display: none; flex-direction: column;">
+    <div class="card-header">
+      <span><span class="card-header-icon">↻</span> SCAN PROGRESS</span>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="stopScan()">Stop</button>
+    </div>
+    <div class="card-body" style="padding: 16px;">
+      <div style="margin-bottom: 8px;">
+        <div style="background: #1a1a1a; border-radius: 4px; height: 20px; overflow: hidden;">
+          <div id="scan-progress-bar" style="background: #00ff41; height: 100%; width: 0%; transition: width 0.3s;">
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: space-between; color: #888; font-size: 11px; margin-bottom: 12px;">
+        <span id="scan-progress-text">0 / 0 files</span>
+        <span id="scan-elapsed">0s</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+        <div class="stat-card" style="background: #0a0a0a; border: 1px solid #00ff41; border-radius: 4px; padding: 8px; text-align: center;">
+          <div style="color: #00ff41; font-size: 20px; font-weight: bold;" id="stat-new">0</div>
+          <div style="color: #888; font-size: 10px;">New</div>
+        </div>
+        <div class="stat-card" style="background: #0a0a0a; border: 1px solid #ffaa00; border-radius: 4px; padding: 8px; text-align: center;">
+          <div style="color: #ffaa00; font-size: 20px; font-weight: bold;" id="stat-known">0</div>
+          <div style="color: #888; font-size: 10px;">Known</div>
+        </div>
+        <div class="stat-card" style="background: #0a0a0a; border: 1px solid #888; border-radius: 4px; padding: 8px; text-align: center;">
+          <div style="color: #888; font-size: 20px; font-weight: bold;" id="stat-clean">0</div>
+          <div style="color: #888; font-size: 10px;">Clean</div>
+        </div>
+        <div class="stat-card" style="background: #0a0a0a; border: 1px solid #ff4444; border-radius: 4px; padding: 8px; text-align: center;">
+          <div style="color: #ff4444; font-size: 20px; font-weight: bold;" id="stat-errors">0</div>
+          <div style="color: #888; font-size: 10px;">Errors</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results Card (hidden until findings exist) -->
+  <div class="card" id="scan-results-card" style="display: none; flex-direction: column; max-height: 50vh;">
+    <div class="card-header" style="display: flex; align-items: center; gap: 12px;">
+      <span><span class="card-header-icon">◆</span> SCAN RESULTS</span>
+      <span style="flex: 1;"></span>
+      <button class="btn btn-ghost btn-sm" id="tab-new" style="font-size:10px; color:#00ff41; border-bottom:2px solid #00ff41;"
+              onclick="switchResultsTab('new')">New (<span id="tab-new-count">0</span>)</button>
+      <button class="btn btn-ghost btn-sm" id="tab-known" style="font-size:10px;"
+              onclick="switchResultsTab('known')">Known (<span id="tab-known-count">0</span>)</button>
+      <button class="btn btn-ghost btn-sm" id="tab-all" style="font-size:10px;"
+              onclick="switchResultsTab('all')">All (<span id="tab-all-count">0</span>)</button>
+      <button class="btn btn-primary btn-sm" id="scan-report-btn" style="font-size:10px; display:none;"
+              onclick="generateReport()">Generate Report</button>
+    </div>
+    <div class="card-body" style="padding: 0; flex: 1; overflow-y: auto;">
+      <table style="width: 100%; font-size: 11px; border-collapse: collapse;" id="results-table">
+        <thead>
+          <tr style="border-bottom: 1px solid #1a1a1a; color: #888; font-size: 10px; position: sticky; top: 0; background: #0a0a0a;">
+            <th style="padding: 6px 10px; text-align: left;">File</th>
+            <th style="padding: 6px 10px; text-align: left;">Path</th>
+            <th style="padding: 6px 10px; text-align: left;">Engine</th>
+            <th style="padding: 6px 10px; text-align: left;">Features</th>
+            <th style="padding: 6px 10px; text-align: center;">Status</th>
+            <th style="padding: 6px 10px; text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="results-tbody">
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <!-- Scan History -->
+  <div class="card" style="display: flex; flex-direction: column;">
+    <div class="card-header" style="display: flex; align-items: center; gap: 12px;">
+      <span><span class="card-header-icon">↻</span> SCAN HISTORY</span>
+      <span style="flex:1;"></span>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="loadScanHistory()">↻ Refresh</button>
+    </div>
+    <div class="card-body" id="scan-history-list" style="padding: 0; max-height: 200px; overflow-y: auto;">
+      <div class="empty-state"><div class="spinner"></div><p>Loading history...</p></div>
+    </div>
+  </div>
+
+</div>
+<!-- v1.9.0: Scanner JS functions defined in dashboard.js (innerHTML doesn't execute scripts) -->

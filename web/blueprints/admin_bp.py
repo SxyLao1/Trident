@@ -18,6 +18,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
 from urllib.parse import unquote
 from utils.sse_manager import persist_log_line
 
@@ -45,6 +46,57 @@ from web.auth import require_auth, get_admin_credentials
 
 # 创建Blueprint
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+# v1.9.0: 扫描结果缓存（供报告生成使用，1小时TTL）
+_scan_results_cache: dict = {}
+_scan_logger = logging.getLogger("monitor.scanner_sse")
+
+import json as _stdlib_json
+
+
+def _save_scan_to_disk(result):
+    """持久化扫描结果到 data/ 目录，供历史回顾"""
+    try:
+        from pathlib import Path as _Path
+        data_dir = _Path("data") / "scans"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        record = {
+            "scan_id": result.scan_id,
+            "target_dir": result.target_dir,
+            "start_time": result.start_time,
+            "end_time": result.end_time,
+            "status": result.status,
+            "total_files": result.total_files,
+            "scanned_files": result.scanned_files,
+            "new_findings": result.new_findings,
+            "known_findings": result.known_findings,
+            "clean": result.clean,
+            "errors": result.errors,
+            "duration": round(result.end_time - result.start_time, 1) if result.end_time else 0,
+            "findings": result.findings[:200],  # 最多保存200条发现
+        }
+        filepath = data_dir / f"{result.scan_id}.json"
+        filepath.write_text(_stdlib_json.dumps(record, indent=2, ensure_ascii=False), encoding='utf-8')
+    except Exception:
+        pass
+
+
+def _load_scans_from_disk() -> list:
+    """从磁盘加载所有扫描历史"""
+    try:
+        from pathlib import Path as _Path
+        data_dir = _Path("data") / "scans"
+        if not data_dir.exists():
+            return []
+        scans = []
+        for f in sorted(data_dir.glob("*.json"), reverse=True):
+            try:
+                scans.append(_stdlib_json.loads(f.read_text(encoding='utf-8')))
+            except Exception:
+                pass
+        return scans
+    except Exception:
+        return []
 
 from flask_wtf.csrf import generate_csrf
 
@@ -737,11 +789,377 @@ def profile_detail_page(profile_id):
         return render_template('admin/profile_detail.html',
             profile=profile, ip_details=ip_details,
             ip_page=ip_page, ip_total_pages=ip_total_pages, ip_total=ip_total,
+            all_ips=list(all_ips),
             events=list(profile.attack_chain)[-50:],
             file_clusters=file_clusters)
     except Exception as e:
         current_app.logger.error(f"[ADMIN] profile detail error: {e}", exc_info=True)
         return render_template('admin/error.html', error=str(e)), 500
+
+
+@admin_bp.route('/file-clusters', methods=['GET'])
+@require_auth
+def file_clusters_page():
+    """v1.9.0: 独立文件簇视图 — 不依赖威胁画像，可直接查看所有文件簇"""
+    try:
+        from core.similarity.file_cluster import get_file_cluster_engine
+        from core.quarantine import get_quarantine_list
+
+        ce = get_file_cluster_engine()
+        stats = ce.get_stats()
+
+        # Build quarantine lookup map
+        quarantined_map = {}
+        for q in get_quarantine_list(status="quarantined", limit=1000):
+            orig = q.get('original_path', '')
+            if orig:
+                quarantined_map[orig] = q.get('quarantine_path', '')
+
+        # Collect all clusters
+        clusters = []
+        for cid, cluster in ce._clusters.items():
+            file_list = []
+            for fp in list(cluster.files.keys())[:20]:  # Max 20 files per cluster in listing
+                is_q = fp in quarantined_map
+                file_list.append({
+                    "path": fp,
+                    "name": fp.rsplit(chr(92), 1)[-1].rsplit('/', 1)[-1],
+                    "quarantined": is_q,
+                    "quarantine_path": quarantined_map.get(fp, ''),
+                })
+            clusters.append({
+                "cluster_id": cid,
+                "size": cluster.size,
+                "files": file_list,
+                "sample_names": cluster.sample_files,
+                "created_at": cluster.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "updated_at": cluster.updated_at.strftime("%Y-%m-%d %H:%M:%S"),
+            })
+
+        # Sort by cluster size descending
+        clusters.sort(key=lambda c: c["size"], reverse=True)
+
+        return render_template('admin/file_clusters.html',
+            clusters=clusters, stats=stats)
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] file clusters error: {e}", exc_info=True)
+        return render_template('admin/error.html', error=str(e)), 500
+
+
+# ═══════════════════════════════════════════════════════════════
+# v1.9.0: 主动扫描器 (Manual Scanner)
+# ═══════════════════════════════════════════════════════════════
+
+@admin_bp.route('/scanner')
+@require_auth
+def scanner_page():
+    """主动扫描器页面"""
+    try:
+        from config.registry import ConfigRegistry
+        config = ConfigRegistry.get_raw_config()
+        websites = config.get("website", {})
+        if isinstance(websites, dict):
+            default_dir = websites.get("path", "")
+        elif isinstance(websites, list) and len(websites) > 0:
+            default_dir = websites[0].get("path", "") if isinstance(websites[0], dict) else ""
+        else:
+            default_dir = ""
+
+        default_extensions = config.get("paths", {}).get(
+            "monitor_extensions", [".php", ".asp", ".aspx", ".jsp", ".jspx"]
+        )
+        exclude_dirs = config.get("website", {}).get("scan_options", {}).get(
+            "exclude_dirs", ["cache", "logs", "temp", "data"]
+        )
+        return render_template('admin/scanner.html',
+            default_dir=default_dir,
+            default_extensions=default_extensions,
+            exclude_dirs=exclude_dirs,
+        )
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] scanner page error: {e}", exc_info=True)
+        return render_template('admin/error.html', error=str(e)), 500
+
+
+@admin_bp.route('/scanner/run')
+@require_auth
+def scanner_run_sse():
+    """SSE 端点: 后台线程扫描 + 队列实时推送进度"""
+    import json as _json
+    import queue
+    import threading
+
+    target_dir = request.args.get('target_dir', '')
+    recursive = request.args.get('recursive', '1') == '1'
+
+    if not target_dir:
+        def _err():
+            yield f"data: {_json.dumps({'event': 'error', 'message': '缺少 target_dir 参数'})}\n\n"
+        return Response(_err(), mimetype='text/event-stream')
+
+    from core.manual_scanner import ManualScanner
+
+    progress_queue = queue.Queue()
+    cancel_flag = {"cancelled": False}
+
+    def _scan_thread():
+        """后台扫描线程 — 把结果推入队列"""
+        try:
+            scanner = ManualScanner(_scan_logger)
+            target = normalize_path(Path(target_dir))
+
+            def progress_cb(result):
+                """进度回调 → 推入队列（非阻塞）"""
+                try:
+                    progress_queue.put_nowait(('progress', {
+                        'scanned': result.scanned_files,
+                        'total': result.total_files,
+                        'new_findings': result.new_findings,
+                        'known_findings': result.known_findings,
+                        'clean': result.clean,
+                        'errors': result.errors,
+                    }))
+                except queue.Full:
+                    pass
+
+            def cancelled():
+                return cancel_flag["cancelled"]
+
+            result = scanner.scan_directory(
+                target_dir=target,
+                recursive=recursive,
+                progress_callback=progress_cb,
+                cancelled_check=cancelled,
+            )
+
+            # 推送完成信号
+            progress_queue.put(('complete', result))
+
+        except Exception as e:
+            _scan_logger.error(f"扫描异常: {e}", exc_info=True)
+            progress_queue.put(('error', str(e)))
+
+    def _generate():
+        # 发送初始化事件
+        try:
+            t = normalize_path(Path(target_dir))
+        except Exception:
+            t = Path(target_dir)
+        yield f"data: {_json.dumps({'event': 'init', 'target': str(t), 'recursive': recursive})}\n\n"
+
+        # 启动后台扫描线程
+        scan_thread = threading.Thread(target=_scan_thread, daemon=True)
+        scan_thread.start()
+
+        # 从队列消费事件，直到扫描完成
+        findings_sent = set()  # 去重（避免重复推送同一个文件）
+        while scan_thread.is_alive() or not progress_queue.empty():
+            try:
+                msg_type, payload = progress_queue.get(timeout=0.3)
+
+                if msg_type == 'progress':
+                    yield f"data: {_json.dumps({'event': 'progress', **payload})}\n\n"
+
+                elif msg_type == 'complete':
+                    result = payload
+                    # 发送每个发现（去重）
+                    for finding in result.findings:
+                        key = finding.get('file_path', '')
+                        if key not in findings_sent:
+                            findings_sent.add(key)
+                            yield f"data: {_json.dumps({'event': 'finding', **finding})}\n\n"
+                    # 发送完成事件
+                    yield f"data: {_json.dumps({'event': 'complete', 'scan_id': result.scan_id, 'total_files': result.total_files, 'scanned_files': result.scanned_files, 'new_findings': result.new_findings, 'known_findings': result.known_findings, 'clean': result.clean, 'errors': result.errors, 'duration': round(result.end_time - result.start_time, 1) if result.end_time else 0, 'status': result.status})}\n\n"
+                    # 缓存结果
+                    _scan_results_cache[result.scan_id] = result
+                    # 清理过期缓存
+                    stale = [k for k, v in _scan_results_cache.items()
+                             if time.time() - v.end_time > 3600]
+                    for k in stale:
+                        del _scan_results_cache[k]
+                    # 持久化到磁盘
+                    _save_scan_to_disk(result)
+                    return
+
+                elif msg_type == 'error':
+                    yield f"data: {_json.dumps({'event': 'error', 'message': str(payload)})}\n\n"
+                    return
+
+            except queue.Empty:
+                # 无新消息，继续等待
+                continue
+
+        # 线程已结束但队列可能还有残余
+        while not progress_queue.empty():
+            try:
+                msg_type, payload = progress_queue.get_nowait()
+                if msg_type == 'complete':
+                    result = payload
+                    for finding in result.findings:
+                        key = finding.get('file_path', '')
+                        if key not in findings_sent:
+                            findings_sent.add(key)
+                            yield f"data: {_json.dumps({'event': 'finding', **finding})}\n\n"
+                    yield f"data: {_json.dumps({'event': 'complete', 'scan_id': result.scan_id, 'total_files': result.total_files, 'scanned_files': result.scanned_files, 'new_findings': result.new_findings, 'known_findings': result.known_findings, 'clean': result.clean, 'errors': result.errors, 'duration': round(result.end_time - result.start_time, 1) if result.end_time else 0, 'status': result.status})}\n\n"
+                    _scan_results_cache[result.scan_id] = result
+                    _save_scan_to_disk(result)
+            except queue.Empty:
+                break
+
+    return Response(
+        stream_with_context(_generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no',
+        }
+    )
+
+
+@admin_bp.route('/scanner/cancel', methods=['POST'])
+@require_auth
+def scanner_cancel():
+    """取消正在进行的扫描（预留）"""
+    return jsonify({"success": True, "message": "取消信号已发送"})
+
+
+@admin_bp.route('/scanner/quarantine', methods=['POST'])
+@require_auth
+def scanner_quarantine():
+    """v1.9.0: 从扫描结果中一键隔离新发现文件"""
+    try:
+        file_path = request.form.get('file_path', '')
+        if not file_path:
+            return jsonify({"error": "缺少 file_path 参数"}), 400
+
+        from core.suspicious_registry import get_all, mark_quarantined
+        from core.quarantine import quarantine_file
+        from utils.path_utils import path_to_key
+
+        target = path_to_key(file_path)
+        record = None
+        for r in get_all(include_deleted=True):
+            if r.get("file_path") == target:
+                record = r
+                break
+
+        if not record:
+            return jsonify({"error": "文件不在检测记录中"}), 404
+        if record.get("quarantine_id"):
+            return jsonify({"error": "文件已被隔离", "quarantine_id": record["quarantine_id"]}), 409
+
+        features = record.get("features", [])
+        rule_name = features[0] if features else "manual_scan_quarantine"
+        result = quarantine_file(
+            file_path=str(file_path),
+            rule_name=rule_name,
+            features=features,
+            original_path=str(file_path)
+        )
+
+        if result is None:
+            return jsonify({"error": "隔离失败，文件可能已被删除或移动"}), 500
+
+        mark_quarantined(str(file_path), result["quarantine_id"])
+        current_app.logger.info(
+            f"[SCANNER] 手动隔离: {file_path} -> {result['quarantine_id']}")
+        return jsonify({
+            "success": True,
+            "quarantine_id": result["quarantine_id"],
+            "message": f"已隔离: {result['quarantine_id']}"
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"[SCANNER] 隔离失败: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_bp.route('/scanner/history')
+@require_auth
+def scanner_history():
+    """v1.9.0: 扫描历史列表（JSON）"""
+    scans = _load_scans_from_disk()
+    # 只返回摘要，不返回完整 findings
+    summaries = []
+    for s in scans[:20]:  # 最近20次
+        summaries.append({
+            "scan_id": s.get("scan_id", ""),
+            "target_dir": s.get("target_dir", ""),
+            "start_time": s.get("start_time", 0),
+            "end_time": s.get("end_time", 0),
+            "status": s.get("status", "unknown"),
+            "total_files": s.get("total_files", 0),
+            "scanned_files": s.get("scanned_files", 0),
+            "new_findings": s.get("new_findings", 0),
+            "known_findings": s.get("known_findings", 0),
+            "clean": s.get("clean", 0),
+            "duration": s.get("duration", 0),
+        })
+    return jsonify({"scans": summaries})
+
+
+@admin_bp.route('/scanner/results')
+@require_auth
+def scanner_results_json():
+    """v1.9.0: 从磁盘加载完整扫描结果（JSON），供历史还原使用"""
+    scan_id = request.args.get('scan_id', '')
+    if not scan_id:
+        return jsonify({"error": "missing scan_id"}), 400
+
+    from pathlib import Path as _Path
+    disk_file = _Path("data") / "scans" / f"{scan_id}.json"
+    if disk_file.exists():
+        try:
+            data = _stdlib_json.loads(disk_file.read_text(encoding='utf-8'))
+            return jsonify(data)
+        except Exception:
+            return jsonify({"error": "failed to load scan data"}), 500
+    return jsonify({"error": "scan not found"}), 404
+
+
+@admin_bp.route('/scanner/report')
+@require_auth
+def scanner_report():
+    """v1.9.0: 生成可打印扫描报告"""
+    scan_id = request.args.get('scan_id', '')
+    result = _scan_results_cache.get(scan_id)
+    if not result:
+        # 从磁盘加载历史记录
+        from pathlib import Path as _Path
+        disk_file = _Path("data") / "scans" / f"{scan_id}.json"
+        if disk_file.exists():
+            try:
+                result = _stdlib_json.loads(disk_file.read_text(encoding='utf-8'))
+                # 包装为 ManualScanResult 兼容对象
+                from core.manual_scanner import ManualScanResult
+                mr = ManualScanResult(
+                    scan_id=result.get("scan_id", scan_id),
+                    target_dir=result.get("target_dir", ""),
+                    start_time=result.get("start_time", 0),
+                    end_time=result.get("end_time", 0),
+                    status=result.get("status", "completed"),
+                    total_files=result.get("total_files", 0),
+                    scanned_files=result.get("scanned_files", 0),
+                    new_findings=result.get("new_findings", 0),
+                    known_findings=result.get("known_findings", 0),
+                    clean=result.get("clean", 0),
+                    errors=result.get("errors", 0),
+                    findings=result.get("findings", []),
+                )
+                result = mr
+            except Exception:
+                return render_template('admin/error.html',
+                    error="扫描结果不存在或已过期"), 404
+        else:
+            return render_template('admin/error.html',
+                error="扫描结果不存在或已过期"), 404
+
+    from datetime import datetime
+    return render_template('admin/scanner_report.html',
+        result=result,
+        generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    )
 
 
 @admin_bp.route('/profiles/<profile_id>/report')
@@ -1096,6 +1514,11 @@ def get_records():
 
         # v1.7.9: Records 只展示活跃威胁（未隔离），已隔离/误报/已删除进 Audit
         all_records = get_all(include_deleted=audit_mode, include_false_positive=audit_mode)
+
+        # v1.9.0: 活跃模式额外排除已隔离文件（quarantine后file_exists仍为True）
+        if not audit_mode:
+            all_records = [r for r in all_records if not r.get("quarantine_id")]
+
         total = len(all_records)
 
         # 分页计算
@@ -1123,8 +1546,11 @@ def get_records():
                 "features": r.get("features", []),
                 "communication_count": r.get("communication_count", 0),
                 "file_path": r.get("file_path", ""),
-                "deleted_at": r.get("deleted_at", "")
+                "deleted_at": r.get("deleted_at", ""),
+                "quarantine_id": r.get("quarantine_id", ""),
             })
+
+        all_paths = [r.get('file_path', '') for r in all_records if r.get('file_path')]
 
         compact = request.args.get('compact') == '1'
         if request.headers.get('HX-Request'):
@@ -1136,7 +1562,8 @@ def get_records():
                 total=total,
                 per_page=per_page,
                 audit_mode=audit_mode,
-                compact=compact
+                compact=compact,
+                all_paths=all_paths,
             )
         else:
             return jsonify({
@@ -1153,6 +1580,119 @@ def get_records():
     except Exception as e:
         current_app.logger.error(f"[ADMIN][RECORDS] 致命错误: {e}", exc_info=True)
         return render_template('admin/error.html', error=str(e)), 500
+
+
+@admin_bp.route('/records/quarantine', methods=['POST'])
+@require_auth
+def manual_quarantine():
+    """v1.9.0: 手动隔离 — 从Records/Audit列表一键隔离活跃威胁"""
+    try:
+        file_path = request.form.get('file_path', '')
+        if not file_path:
+            return jsonify({"error": "缺少 file_path 参数"}), 400
+
+        from core.suspicious_registry import get_all, mark_quarantined
+        from core.quarantine import quarantine_file
+        from utils.path_utils import path_to_key
+
+        # 查找Registry记录获取features
+        target = path_to_key(file_path)
+        record = None
+        for r in get_all(include_deleted=True):
+            if r.get("file_path") == target:
+                record = r
+                break
+
+        if not record:
+            return jsonify({"error": "文件不在检测记录中"}), 404
+
+        if record.get("quarantine_id"):
+            return jsonify({"error": "文件已被隔离", "quarantine_id": record["quarantine_id"]}), 409
+
+        # 执行隔离
+        features = record.get("features", [])
+        rule_name = features[0] if features else "manual_quarantine"
+        result = quarantine_file(
+            file_path=str(file_path),
+            rule_name=rule_name,
+            features=features,
+            original_path=str(file_path)
+        )
+
+        if result is None:
+            return jsonify({"error": "隔离失败，文件可能已被删除或移动"}), 500
+
+        # 回写Registry
+        mark_quarantined(str(file_path), result["quarantine_id"])
+
+        current_app.logger.info(
+            f"[ADMIN] 手动隔离成功: {file_path} -> {result['quarantine_id']}")
+        return jsonify({
+            "success": True,
+            "quarantine_id": result["quarantine_id"],
+            "message": f"已隔离: {result['quarantine_id']}"
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] 手动隔离失败: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_bp.route('/records/batch', methods=['POST'])
+@require_auth
+def records_batch():
+    try:
+        action = request.form.get('action', '')
+        file_paths = request.form.getlist('file_paths[]')
+        if not file_paths:
+            return jsonify({'error': 'missing file_paths'}), 400
+        from core.suspicious_registry import get_all, mark_quarantined, _load_registry, _save_registry
+        from core.quarantine import quarantine_file
+        from utils.path_utils import path_to_key
+        from datetime import datetime as _dt
+        results = {'success': 0, 'failed': 0, 'skipped': 0}
+        if action == 'quarantine':
+            for fp in file_paths:
+                try:
+                    target = path_to_key(fp)
+                    record = None
+                    for r in get_all(include_deleted=True):
+                        if r.get('file_path') == target: record = r; break
+                    if not record or record.get('quarantine_id'): results['skipped'] += 1; continue
+                    features = record.get('features', [])
+                    rule = features[0] if features else 'batch'
+                    qr = quarantine_file(str(fp), rule, features, str(fp))
+                    if qr: mark_quarantined(str(fp), qr['quarantine_id']); results['success'] += 1
+                    else: results['failed'] += 1
+                except Exception: results['failed'] += 1
+        elif action == 'false_positive':
+            for fp in file_paths:
+                try:
+                    target = path_to_key(fp); registry = _load_registry(); found = False
+                    for item in registry:
+                        if item.get('file_path') == target:
+                            item['marked_false_positive'] = True
+                            item['false_positive_at'] = _dt.now().isoformat(); found = True; break
+                    if found: _save_registry(registry); results['success'] += 1
+                    else: results['skipped'] += 1
+                except Exception: results['failed'] += 1
+        elif action == 'delete':
+            for fp in file_paths:
+                try:
+                    target = path_to_key(fp); registry = _load_registry(); found = False
+                    for item in registry:
+                        if item.get('file_path') == target:
+                            item['file_exists'] = False
+                            item['deleted_at'] = _dt.now().isoformat(); found = True; break
+                    if found: _save_registry(registry); results['success'] += 1
+                    else: results['skipped'] += 1
+                except Exception: results['failed'] += 1
+        else:
+            return jsonify({'error': 'unknown action'}), 400
+        return jsonify(results)
+    except Exception as e:
+        current_app.logger.error('[ADMIN] batch error: {}'.format(e), exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 
 @admin_bp.route('/records/detail', methods=['GET'])
@@ -1184,16 +1724,31 @@ def get_record_detail():
             display_name = file_path.split("\\")[-1].split("/")[-1]
             file_size = 0
 
-        # 检查是否已被隔离（v1.8.4: 完整路径匹配 + 文件名匹配）
+        # v1.8.4: 精确路径匹配隔离记录（不复用同名文件的历史记录）
         from core.quarantine import get_quarantine_list
-        quarantine_records = get_quarantine_list(status=None)  # 查所有状态
+        quarantine_records = get_quarantine_list(status=None)
         quarantine_info = None
         for q in quarantine_records:
-            q_orig = q.get("original_path", "")
-            # 精确匹配或文件名匹配
-            if q_orig == file_path or (q_orig and file_path and q_orig.endswith(file_path.rsplit(chr(92),1)[-1].rsplit('/',1)[-1])):
+            if q.get("original_path", "") == file_path:
                 quarantine_info = q
                 break
+
+        # v1.9.0: 查找关联的威胁画像
+        linked_profiles = []
+        try:
+            from core.threat_graph import get_threat_graph
+            tg = get_threat_graph()
+            for pid, profile in tg._profiles.items():
+                if file_path in profile.target_files:
+                    linked_profiles.append({
+                        "profile_id": pid,
+                        "risk_score": round(profile.risk_score, 2),
+                        "ip_count": len(profile.ip_pool),
+                        "tool_signature": profile.tool_signature or "N/A",
+                    })
+            linked_profiles.sort(key=lambda p: p["risk_score"], reverse=True)
+        except Exception:
+            pass
 
         detail = {
             "file_path": file_path,
@@ -1208,7 +1763,8 @@ def get_record_detail():
             "alerted": record.get("alerted", False),
             "marked_false_positive": record.get("marked_false_positive", False),
             "deleted_at": record.get("deleted_at", "N/A"),
-            "quarantine_info": quarantine_info
+            "quarantine_info": quarantine_info,
+            "linked_profiles": linked_profiles,
         }
 
         if request.headers.get('HX-Request'):
@@ -2869,3 +3425,147 @@ def admin_health():
 
     http_code = 200 if status['status'] == 'healthy' else 503
     return jsonify(status), http_code
+
+
+# ═══════════════════════════════════════════════════════════════
+# v1.8.4: 安全文件内容查看器
+# ═══════════════════════════════════════════════════════════════
+
+MAX_VIEW_SIZE = 512 * 1024  # 512KB 上限
+
+
+def _verify_file_in_registry(file_path: str) -> bool:
+    """验证文件是否在 Registry 中（白名单）"""
+    try:
+        from core.suspicious_registry import get_all
+        from utils.path_utils import path_to_key
+        target = path_to_key(file_path)
+        for record in get_all(include_deleted=True):
+            if record.get("file_path") == target:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def _verify_file_in_quarantine(qid: str) -> Optional[Path]:
+    """验证 quarantine_id 是否在隔离库中，返回隔离路径或 None"""
+    try:
+        from core.quarantine import get_quarantine_detail
+        record = get_quarantine_detail(qid)
+        if record:
+            qpath = record.get("quarantine_path", "")
+            if qpath and Path(qpath).exists():
+                return Path(qpath)
+        return None
+    except Exception:
+        return None
+
+
+def _html_escape(text: str) -> str:
+    """HTML 实体转义，防 XSS"""
+    return (
+        text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&#39;")
+    )
+
+
+@admin_bp.route('/file/content', methods=['GET'])
+@require_auth
+def view_file_content():
+    """
+    v1.8.4: 安全文件内容查看器
+
+    白名单机制：只允许查看 Registry 或 Quarantine 中已记录的文件。
+    拒绝任意路径读取、目录穿越、文件包含。
+
+    参数:
+        path   — 文件原始路径（Registry 白名单验证）
+        qid    — 隔离 ID（Quarantine 白名单验证）
+        raw    — 设为 1 返回原始文本（默认 JSON）
+
+    安全措施:
+        1. 白名单验证（Registry 或 Quarantine）
+        2. HTML 实体转义（防 XSS）
+        3. 512KB 上限（防 DoS）
+        4. Content-Type: text/plain（不解析脚本）
+    """
+    file_path = request.args.get('path', '')
+    qid = request.args.get('qid', '')
+
+    # ── 必须且仅提供 path 或 qid 之一 ──
+    if not file_path and not qid:
+        return jsonify({"error": "缺少 path 或 qid 参数"}), 400
+    if file_path and qid:
+        return jsonify({"error": "path 和 qid 互斥，请只提供一个"}), 400
+
+    # ── 解析目标路径 ──
+    resolved = None
+    source_label = ""
+
+    if qid:
+        qpath = _verify_file_in_quarantine(qid)
+        if not qpath:
+            return jsonify({"error": "隔离记录不存在或文件已被删除"}), 404
+        resolved = qpath
+        source_label = f"Quarantine: {qid}"
+    else:
+        # 路径格式标准化 + 目录穿越检测
+        try:
+            from utils.path_utils import normalize_path
+            normalized = normalize_path(file_path)
+        except Exception:
+            return jsonify({"error": "无效的文件路径"}), 400
+
+        if not _verify_file_in_registry(str(normalized)):
+            return jsonify({"error": "文件不在检测记录中，拒绝访问"}), 403
+
+        if not normalized.exists():
+            return jsonify({"error": "文件已被删除"}), 404
+
+        # 二次确认：解析后路径必须在 Registry 白名单中
+        if not _verify_file_in_registry(str(normalized.resolve())):
+            return jsonify({"error": "路径解析不一致，拒绝访问"}), 403
+
+        resolved = normalized.resolve()
+        source_label = str(resolved)
+
+    # ── 读取文件 ──
+    try:
+        file_size = resolved.stat().st_size
+        truncated = file_size > MAX_VIEW_SIZE
+
+        with open(resolved, 'rb') as f:
+            raw_bytes = f.read(MAX_VIEW_SIZE)
+
+        # 尝试 UTF-8 解码，失败则 Latin-1（保留所有字节）
+        try:
+            text = raw_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            text = raw_bytes.decode('latin-1')
+
+        escaped = _html_escape(text)
+        lines = escaped.split('\n')
+
+        result = {
+            "path": source_label,
+            "size": file_size,
+            "truncated": truncated,
+            "lines": len(lines),
+            "content": escaped,
+        }
+
+        # raw 模式：直接返回文本（前端 fetch 用）
+        if request.args.get('raw') == '1':
+            return escaped, 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
+        return jsonify(result)
+
+    except PermissionError:
+        return jsonify({"error": "文件读取权限不足"}), 403
+    except Exception as e:
+        current_app.logger.error(f"[FILE_VIEWER] 读取失败: {e}", exc_info=True)
+        return jsonify({"error": f"读取文件失败: {str(e)}"}), 500

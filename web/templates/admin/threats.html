@@ -17,6 +17,11 @@
             onclick="switchThreatsTab('audit')">
       AUDIT LOG
     </button>
+    <button class="threats-tab" data-tab="clusters"
+            style="background: none; border: none; color: #666; font-family: var(--font-mono); font-size: 13px; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent;"
+            onclick="switchThreatsTab('clusters')">
+      CLUSTERS
+    </button>
   </div>
 
   <!-- Active Threats -->
@@ -46,6 +51,16 @@
          hx-trigger="load"
          hx-swap="innerHTML">
       <div class="empty-state"><div class="spinner"></div><p>Loading audit log...</p></div>
+    </div>
+  </div>
+
+  <!-- Clusters (v1.9.0: 第4个Tab，懒加载) -->
+  <div id="threats-tab-clusters" class="threats-tab-content" style="flex: 1; overflow: hidden; display: none;">
+    <div id="threats-clusters-container" style="flex: 1; min-height: 0; overflow-y: auto;"
+         hx-get="/admin/file-clusters"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+      <div class="empty-state"><div class="spinner"></div><p>Loading clusters...</p></div>
     </div>
   </div>
 </div>

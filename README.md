@@ -15,7 +15,7 @@
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/version-1.8.3-blue?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.8.4-blue?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/status-stable-success?style=flat-square" alt="Status">
   <img src="https://img.shields.io/badge/python-3.8%2B-green?style=flat-square&logo=python" alt="Python">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
@@ -33,11 +33,15 @@ Trident is a production-grade WebShell detection system for Linux and Windows. I
 Key capabilities:
 
 - **Real-time file monitoring** — Linux Inotify / Windows ReadDirectoryChangesW adaptive switching
+- **Manual scanner** — Active directory scanning with SSE real-time progress, scan history, printable reports
 - **YARA rule engine** — 18+ rule files covering PHP, ASP, JSP, ASPX, Godzilla, Behinder; hot-reload supported
+- **Threat profiling** — Attacker behavior clustering via UA/time-bucket, IP pool merging, decay engine
+- **File similarity clustering** — ssdeep/TLSH/SimHash hash engine with 0.80 threshold grouping
+- **Batch operations** — Cross-page multi-select for Records/Quarantine with batch quarantine/restore/delete
 - **WAL transaction logs** — Async batch writes with auto rotation, minimal data loss under file locking
 - **Smart alerting** — Exponential backoff with adaptive thresholds to reduce false positives
-- **Web dashboard** — Dark theme terminal-style interface, SSE real-time log stream, HTMX-driven
-- **Enterprise security** — CSRF protection, IP whitelist, Scrypt password hashing
+- **Web dashboard** — Dark theme terminal-style interface, SSE real-time log stream, HTMX-driven, SPA navigation
+- **Enterprise security** — CSRF protection, IP whitelist, Scrypt password hashing, static JS auth guard
 - **Wildcard log tracing** — Recursive path matching like `**/access.log` with attacker IP extraction
 
 ## Quick Start

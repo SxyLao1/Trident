@@ -24,7 +24,7 @@ window.TridentSSEManager = {
 
   loadHistory() {
     var self = this;
-    var logStream = document.getElementById('log-stream');
+    var logStream = document.getElementById('live-log-stream');
     if (!logStream) {
       // 不设置 historyLoaded，等 DOM 准备好后再加载
       return;

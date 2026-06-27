@@ -510,8 +510,9 @@ def _save_registry(data: List[Dict]):
 
 
 
-def add(file_path: Path, features: List[str]):
-    """添加可疑文件（线程安全版）"""
+def add(file_path: Path, features: List[str], first_seen_ip: str = None, detection_source: str = "passive"):
+    """添加可疑文件（线程安全版）。v1.8.4: 支持传入 first_seen_ip，避免本地检测时IP显示None。
+       v1.9.0: 支持 detection_source 区分被动/主动检测。"""
     _ensure_initialized()
 
     try:
@@ -531,15 +532,21 @@ def add(file_path: Path, features: List[str]):
             updated = False
             for item in registry:
                 if item["file_path"] == abs_path:
-                    # 更新现有记录
+                    # 更新现有记录：保留已有的 first_seen_ip（除非新的有效IP）
+                    existing_ip = item.get("first_seen_ip")
+                    new_ip = first_seen_ip if first_seen_ip else existing_ip
+                    # v1.9.0: 保留已有 detection_source，active 覆盖 passive
+                    existing_src = item.get("detection_source", "passive")
+                    new_src = detection_source if detection_source == "active" else existing_src
                     item.update({
                         "file_exists": True,
                         "deleted_at": None,
                         "alerted": False,
                         "communication_count": 0,
-                        "first_seen_ip": None,
+                        "first_seen_ip": new_ip,
                         "detected_at": datetime.now().isoformat(),
-                        "features": features
+                        "features": features,
+                        "detection_source": new_src,
                     })
                     updated = True
                     break
@@ -552,9 +559,10 @@ def add(file_path: Path, features: List[str]):
                     "features": features,
                     "alerted": False,
                     "file_exists": True,
-                    "first_seen_ip": None,
+                    "first_seen_ip": first_seen_ip,
                     "communication_count": 0,
-                    "deleted_at": None
+                    "deleted_at": None,
+                    "detection_source": detection_source,
                 })
 
             _last_registry_snapshot = registry

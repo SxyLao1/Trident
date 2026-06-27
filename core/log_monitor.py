@@ -418,13 +418,32 @@ class LogMonitor:
             self.logger.critical(f"[ALERT][{alert_level}] 攻击IP: {attacker_ip}")
             self.logger.critical("=" * 50)
 
-            # 异步发送
+            # v1.8.4: 异步发送（使用统一消息构建器）
             def _send_async():
                 try:
-                    from core.notifier import get_notifier
+                    from core.notifier import get_notifier, format_alert_message
                     notifier = get_notifier(self.logger)
-                    message = (f"WebShell被访问！\n文件: {file_path.name}\n"
-                               f"攻击IP: {attacker_ip}\n告警级别: {alert_level}")
+                    # 读取系统状态（隔离/封禁开关）
+                    sys_status = {"auto_quarantine_enabled": True, "auto_block_enabled": False, "block_device_count": 0}
+                    try:
+                        from config.registry import ConfigRegistry
+                        cfg = ConfigRegistry.get_raw_config()
+                        sys_status["auto_quarantine_enabled"] = cfg.get("quarantine", {}).get("auto_quarantine_enabled", True)
+                        blocker_cfg = cfg.get("ip_blocker", {})
+                        sys_status["auto_block_enabled"] = blocker_cfg.get("auto_block_enabled", False)
+                        sys_status["block_device_count"] = len(blocker_cfg.get("devices", []))
+                    except Exception:
+                        pass
+                    ctx = {
+                        "alert_type": "webshell_access",
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "file_path": str(file_path),
+                        "attacker_ip": attacker_ip,
+                        "alert_level": alert_level,
+                        "level": alert_level,
+                    }
+                    ctx.update(sys_status)
+                    message = format_alert_message(ctx)
                     notifier.send_alert(message, level=alert_level)
                 except Exception as e:
                     import sys

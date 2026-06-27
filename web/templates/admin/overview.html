@@ -33,8 +33,8 @@
       <span><span class="card-header-icon">⚡</span> ACTIVE THREATS</span>
       <span class="badge badge-danger">Needs Attention</span>
     </div>
-    <div class="card-body" style="flex: 1; padding: 0; overflow: hidden;">
-      <div id="overview-active-threats" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;"
+    <div class="card-body" style="flex: 1; padding: 0; overflow-y: auto;">
+      <div id="overview-active-threats" style="padding: 16px;"
            hx-get="/admin/records?compact=1"
            hx-trigger="load, every 30s"
            hx-swap="innerHTML">

@@ -365,3 +365,42 @@
   color: #888;
 }
 
+/* ---- v1.8.4: 文件内容查看器 ---- */
+
+/* 关键词高亮 */
+.kw-danger { color: #ff4444; font-weight: bold; }
+.kw-warn  { color: #ffaa00; font-weight: bold; }
+.kw-info  { color: #44aaff; }
+.kw-var   { color: #ff66ff; }
+
+/* 查看器容器 */
+#file-viewer-modal .modal-container {
+  background: #050505;
+  border: 1px solid #00ff41;
+  border-radius: 6px;
+}
+
+#file-viewer-modal .modal-header {
+  background: #0a0a0a;
+}
+
+/* 行号（CSS counter） */
+#fv-content {
+  counter-reset: fv-line;
+}
+#fv-content::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0;
+  width: 44px;
+  height: 100%;
+  background: rgba(0,255,65,0.03);
+  border-right: 1px solid rgba(0,255,65,0.15);
+  pointer-events: none;
+}
+/*
+  行号通过 JS 注入 <span class="line-num"> 实现，
+  因为 CSS counter 在 innerHTML 替换后不可靠。
+  如果 JS 未注入，回退到纯 pre 显示。
+*/
+

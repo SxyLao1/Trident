@@ -7,6 +7,40 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.8.4] - 2026-06-27
+
+### Added
+- **Manual Scanner**: active directory scanning with SSE real-time progress, YARA + static analysis
+- **Batch Operations**: cross-page multi-select for Records and Quarantine with batch quarantine/restore/delete/FP
+- **File Clusters Tab**: ssdeep/TLSH/SimHash similarity clustering view in Threats page
+- **Record Detail → Profile linking**: linked threat profiles shown in record detail modal
+- **Scan History**: persistent scan results in `data/scans/`, restorable via history panel
+- **Scan Reports**: printable HTML reports with findings summary
+- **`detection_source` field**: differentiates passive (Watchdog) vs active (Manual Scanner) detections
+- Static JS protection: unauthenticated access returns 404
+
+### Changed
+- **UI Consolidation**: Records/Quarantine toolbars unified into single-row layout with inline search
+- Scanner page: three-card layout (Config / Results / History) with auto-collapse
+- Records rows: only Source + Detail per-row; batch actions moved to toolbar
+- Audit Log pagination: unique container IDs for Active/Audit tabs
+- Toolbar selectors: class-based instead of ID-based to prevent duplicate-ID bugs
+- `suspicious_registry.add()` accepts `detection_source` parameter
+
+### Fixed
+- File viewer backslash corruption on Windows paths (switched to `dataset.path`)
+- Audit Log pagination unresponsive (duplicate `#records-table-container` ID)
+- Audit Log page-jump missing `audit` parameter
+- Overview ACTIVE THREATS quadrant scrollbar missing
+- IP checkbox manual toggle not updating selection Set
+- IP Select All only capturing current page
+- Scanner SSE crash (`current_app.logger` outside app context)
+- Scanner progress bar stuck (added threading + queue architecture)
+- Quarantined records leaking into Active Threats list
+- Records showing Restore button on active threats
+
+---
+
 ## [1.7.9] - 2026-06-25
 
 ### Added

@@ -57,6 +57,8 @@ def quarantine_list():
 
         stats = get_quarantine_stats()
 
+        all_qids = [r.get('quarantine_id', '') for r in all_records if r.get('quarantine_id')]
+
         compact = request.args.get('compact') == '1'
         if request.headers.get('HX-Request'):
             return render_template(
@@ -68,7 +70,8 @@ def quarantine_list():
                 total=total,
                 per_page=per_page,
                 current_status=status,
-                compact=compact
+                compact=compact,
+                all_qids=all_qids,
             )
         else:
             return render_template(
@@ -157,4 +160,39 @@ def quarantine_delete():
 
     except Exception as e:
         current_app.logger.error(f"[QUARANTINE][DELETE] 错误: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@quarantine_bp.route('/quarantine/batch', methods=['POST'])
+@require_auth
+def quarantine_batch():
+    """v1.9.0: 批量操作 — restore / delete"""
+    try:
+        action = request.form.get('action', '')
+        qids = request.form.getlist('qids[]')
+        if not qids:
+            return jsonify({"error": "missing qids"}), 400
+
+        results = {"success": 0, "failed": 0, "skipped": 0}
+
+        for qid in qids:
+            try:
+                if action == 'restore':
+                    if restore_file(qid):
+                        results["success"] += 1
+                    else:
+                        results["failed"] += 1
+                elif action == 'delete':
+                    if delete_quarantine(qid):
+                        results["success"] += 1
+                    else:
+                        results["failed"] += 1
+                else:
+                    return jsonify({"error": "unknown action"}), 400
+            except Exception:
+                results["failed"] += 1
+
+        return jsonify(results)
+    except Exception as e:
+        current_app.logger.error(f"[QUARANTINE][BATCH] error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500

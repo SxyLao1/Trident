@@ -112,6 +112,7 @@ class ScanResult:
     engine: str = "static"
     error: Optional[str] = None
     analysis_data: Optional[dict] = None
+    detection_source: str = "unknown"  # v1.9.0: "passive" | "active" | "unknown"
 
 @dataclass
 class Website:
