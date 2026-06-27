@@ -1,52 +1,60 @@
 # Roadmap
 
-> **Current Version**: v1.7.9-stable (2026-06-25)  
-> **Next Milestone**: v1.8.0  
+> **Current Version**: v1.8.4-stable (2026-06-27)  
+> **Next Milestone**: v1.9.0  
 > **Vision**: Lightweight Web Perimeter Security — Passive Detection + Semi-Active Response
 
 ---
 
-## v1.7.9-stable — Quarantine Pipeline + Security Hardening ✅ (Complete)
+## v1.7.9 — Quarantine Pipeline + Security Hardening ✅ (Complete)
 
 See [CHANGELOG.md](./CHANGELOG.md).
 
 ---
 
-## v1.8.0 — Web Config Panel + Threat Detection Expansion (2026-Q3)
+## v1.8.0 — Web Config Panel + Threat Detection Expansion ✅ (Complete, 2026-06-21)
 
-**Goal**: Expand from "WebShell-only" to "Web-layer threat detection platform".
-
-**Core Principles**:
-- Passive detection first: file system monitoring + log analysis, no HTTP interception
-- Semi-active response: auto-quarantine files + IP blocking upon detection, leave HTTP filtering to Nginx/WAF
-- Open APIs: IP blocking API for integration with existing WAF/FW
-- Attack surface reduction: admin panel hardening, multi-site support, no version exposure in frontend
-
-**Planned Features**:
-
-| # | Feature | Module | Complexity |
-|---|---------|--------|------------|
-| 1 | Auto file quarantine | `core/quarantine.py` | Low |
-| 2 | IP auto-blocking (local blacklist) | `core/ip_blocker.py` | Medium |
-| 3 | IP blocking API (external WAF/FW) | `core/ip_blocker.py` | Medium |
-| 4 | Process behavior monitoring | `core/process_monitor.py` | Medium |
-| 5 | Memory shell plugin architecture | `plugins/java-memshell/` | High |
-| 6 | PE/EXE upload detection | `core/pe_detector.py` | Low |
-| 7 | Webhook alerts (DingTalk/WeCom/Feishu) | `core/notifier.py` | Low |
-| 8 | SIEM export (JSON Lines / CEF / Syslog) | `utils/siem_formatter.py` | Medium |
-| 9 | MITRE ATT&CK tags | Event schema | Low |
-| 10 | Attack chain reconstruction | Dashboard timeline | Medium |
-
-**Design Decisions**:
-
-- **IP Blocking**: "Event Emitter, Not Executor" — maintain internal blacklist table + webhook output; let external WAF/FW execute blocks
-- **Auto-Response**: Three-tier confidence (Low/Medium/High) with configurable thresholds
-- **Memory Shell**: Plugin architecture with subprocess orchestration; no JVM/CLR embedded in Python
-- **Storage**: v1.8 stays JSON; v1.9 introduces SQLite (optional) behind abstraction layer
+| # | Feature | Status |
+|---|---------|--------|
+| 1 | Auto file quarantine | ✅ |
+| 2 | IP auto-blocking | ✅ |
+| 3 | IP blocking API | ✅ |
+| 7 | Webhook alerts | ✅ |
+| 9 | MITRE ATT&CK tags | ✅ |
+| 10 | Attack chain reconstruction | ✅ |
 
 ---
 
-## v1.9.x — Multi-Site + Ecosystem (2026-Q4)
+## v1.8.1–v1.8.4 — Profile Engine + Scanner + Batch Ops + Block Ledger ✅ (Complete, 2026-06-27)
+
+Major additions since v1.8.0:
+
+| Feature | Status |
+|---------|--------|
+| Threat profiling (UA+time+IP pool+decay) | ✅ |
+| File similarity clustering (ppdeep/TLSH/SimHash) | ✅ |
+| Manual scanner (SSE progress + history + reports) | ✅ |
+| Batch operations (Records + Quarantine cross-page select) | ✅ |
+| Block audit ledger (persistent + editable notes + export) | ✅ |
+| Multi-device broadcast (dynamic device toggles) | ✅ |
+| Bidirectional links (Records ↔ Profiles) | ✅ |
+| File Clusters tab in Threats | ✅ |
+| Security: static JS auth guard, CSRF, file viewer whitelist | ✅ |
+| ppdeep pure-Python CTPH for Windows | ✅ |
+
+---
+
+## v1.9.x — SQLite + Multi-Site + WAF Adapters (2026-Q3)
+
+**Priority items**:
+1. **SQLite persistence** — replace JSON for performance
+2. **Multi-site support** — [[website]] array
+3. **WAF standard adapters** — ModSecurity/Cloudflare/AWS/Syslog
+4. **gunicorn deployment** — multi-worker
+5. **SIEM export** (CEF/Syslog)
+6. **Core module tests** — 80%+ coverage + CI/CD
+7. **Memory shell plugin** — Java reflection PoC
+8. **Log heuristic engine** — behavior-level detection
 
 - Multi-site monitoring: `[[website]]` array in `config.toml`, single Dashboard for all sites
 - Site isolation: independent registry/WAL per site or shared central WAL

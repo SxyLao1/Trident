@@ -108,6 +108,26 @@
   </div>
   {% endif %}
 
+  <!-- v1.9.0: Linked Detection Records -->
+  {% if linked_records %}
+  <div>
+    <h4 style="color:#00ff41; margin:0 0 8px 0;">LINKED DETECTION RECORDS ({{ linked_records|length }})</h4>
+    <div style="display:flex; flex-wrap:wrap; gap:6px;">
+      {% for lr in linked_records[:20] %}
+      <div style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:6px 10px; font-size:10px; display:flex; align-items:center; gap:8px;">
+        <code style="color:#ccc;font-size:10px;">{{ lr.display_name }}</code>
+        <span style="color:#888;font-size:9px;">{{ lr.detected_at }}</span>
+        {% if lr.quarantine_id %}<span style="color:#ff6b35;font-size:9px;">Q</span>{% endif %}
+        {% for f in lr.features[:2] %}<span class="badge badge-blue" style="font-size:8px;">{{ f[:20] }}</span>{% endfor %}
+      </div>
+      {% endfor %}
+      {% if linked_records|length > 20 %}
+      <span style="color:#555;font-size:10px;">... and {{ linked_records|length - 20 }} more</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
   <!-- IP Table -->
   <div id="ip-table-section" data-all-ips='{{ all_ips|tojson }}'>
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">

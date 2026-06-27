@@ -49,7 +49,7 @@ Key capabilities:
 ### Linux / macOS
 
 ```bash
-git clone https://github.com/yourusername/trident.git
+git clone https://github.com/SxyLao1/Trident.git
 cd trident
 chmod +x install.sh
 ./install.sh
@@ -58,7 +58,7 @@ chmod +x install.sh
 ### Windows
 
 ```powershell
-git clone https://github.com/yourusername/trident.git
+git clone https://github.com/SxyLao1/Trident.git
 cd trident
 .\install.bat
 ```

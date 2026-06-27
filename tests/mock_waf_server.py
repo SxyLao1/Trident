@@ -137,29 +137,104 @@ INDEX_HTML = """<!DOCTYPE html>
 <html><head><title>Trident Mock WAF</title>
 <style>body{background:#0a0a0a;color:#ccc;font-family:monospace;padding:20px}
 h1{color:#00ff41} .card{background:#111;border:1px solid #1a1a1a;padding:12px;margin:8px 0;border-radius:4px}
-button{background:#000;color:#00ff41;border:1px solid #00ff41;padding:6px 14px;cursor:pointer;margin:4px}
-button:hover{background:#002200} .running{color:#ffaa00} .completed{color:#00ff41} .stopped{color:#666}
-pre{background:#000;padding:8px;overflow-x:auto;}</style></head><body>
-<h1>Trident Mock WAF Server v1.8.1</h1>
+button{background:#000;color:#00ff41;border:1px solid #00ff41;padding:6px 14px;cursor:pointer;margin:4px;font-family:monospace}
+button:hover{background:#002200} button:disabled{opacity:0.3;cursor:not-allowed}
+.running{color:#ffaa00} .completed{color:#00ff41} .stopped{color:#666}
+pre{background:#000;padding:8px;overflow-x:auto;max-height:300px;overflow-y:auto}
+.spinner{display:inline-block;width:12px;height:12px;border:2px solid #333;border-top-color:#ffaa00;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:4px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+input[type=number]{background:#000;color:#ccc;border:1px solid #333;padding:4px;width:60px;font-family:monospace}
+</style></head><body>
+<h1>Trident Mock WAF Server v1.9.0</h1>
 {% for name, cfg in scenarios.items() %}
-<div class="card">
-<h3>{{ cfg.name }} <span class="{{ statuses.get(name, 'stopped') }}">[{{ statuses.get(name, 'stopped') }}]</span></h3>
+<div class="card" id="card-{{ name }}">
+<h3>{{ cfg.name }} <span id="status-{{ name }}" class="{{ statuses.get(name, 'stopped') }}">[{{ statuses.get(name, 'stopped') }}]</span></h3>
 <p>{{ cfg.description }}</p>
 <p>IPs: {{ cfg.ip_pool_size }} | Duration: {{ cfg.duration_seconds }}s | Rate: {{ cfg.events_per_minute }}/min</p>
-<form method="POST" action="/start" style="display:inline">
-  <input name="scenario" value="{{ name }}" hidden>
-  <input name="speed" value="60" style="width:60px;background:#000;color:#ccc;border:1px solid #333;padding:4px">
-  <button>Start (Nx speed)</button>
-</form>
-<form method="POST" action="/stop" style="display:inline">
-  <input name="scenario" value="{{ name }}" hidden><button>Stop</button>
-</form>
+<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+  Speed: <input type="number" id="speed-{{ name }}" value="60" min="1" max="1000" title="Time compression multiplier">
+  <button id="btn-start-{{ name }}" onclick="startScenario('{{ name }}')">Start</button>
+  <button id="btn-stop-{{ name }}" onclick="stopScenario('{{ name }}')" disabled>Stop</button>
+  <span id="progress-{{ name }}" style="font-size:10px;color:#888;"></span>
+</div>
 </div>{% endfor %}
-<p>API: <code>GET /api/open/events?start=&lt;ISO&gt;&end=&lt;ISO&gt;</code></p>
-{% if events_preview %}
-<h3>Latest Events</h3><pre>{{ events_preview }}</pre>
-{% endif %}
+<p>API: <code>GET /api/open/events?start=&lt;ISO&gt;&end=&lt;ISO&gt;</code> | <code>GET /status</code></p>
+<div><h3>Latest Events <button onclick="refreshEvents()" style="font-size:10px;padding:2px 8px;">Refresh</button></h3>
+<pre id="events-preview">{{ events_preview or 'No events yet.' }}</pre></div>
+<script>
+function startScenario(name) {
+  var speed = document.getElementById('speed-' + name).value || 60;
+  var btn = document.getElementById('btn-start-' + name);
+  btn.disabled = true; btn.textContent = 'Starting...';
+  fetch('/start?scenario=' + encodeURIComponent(name) + '&speed=' + speed, {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.success) {
+        document.getElementById('status-' + name).textContent = '[running]';
+        document.getElementById('status-' + name).className = 'running';
+        document.getElementById('btn-stop-' + name).disabled = false;
+        document.getElementById('progress-' + name).innerHTML = '<span class="spinner"></span>Generating events...';
+      } else {
+        alert(d.error || 'Failed to start');
+      }
+      btn.disabled = false; btn.textContent = 'Start';
+    });
+}
+function stopScenario(name) {
+  var btn = document.getElementById('btn-stop-' + name);
+  btn.disabled = true; btn.textContent = 'Stopping...';
+  fetch('/stop?scenario=' + encodeURIComponent(name), {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.success) {
+        document.getElementById('status-' + name).textContent = '[stopped]';
+        document.getElementById('status-' + name).className = 'stopped';
+        document.getElementById('btn-start-' + name).disabled = false;
+        document.getElementById('progress-' + name).textContent = '';
+      }
+      btn.disabled = false; btn.textContent = 'Stop'; btn.disabled = true;
+    });
+}
+function refreshEvents() {
+  fetch('/status').then(function(r){return r.json()}).then(function(d){
+    var pre = document.getElementById('events-preview');
+    var lines = [];
+    (d.recent_events||[]).forEach(function(e){ lines.push(JSON.stringify(e)); });
+    pre.textContent = lines.join('\\n') || 'No events yet.';
+  });
+}
+function autoRefresh() {
+  fetch('/status').then(function(r){return r.json()}).then(function(d){
+    var sc = d.scenarios || {};
+    Object.keys(sc).forEach(function(name){
+      var s = sc[name];
+      var status = s.running ? 'running' : (s.completed ? 'completed' : 'stopped');
+      var stEl = document.getElementById('status-' + name);
+      var startBtn = document.getElementById('btn-start-' + name);
+      var stopBtn = document.getElementById('btn-stop-' + name);
+      var progEl = document.getElementById('progress-' + name);
+      if (!stEl) return;
+      stEl.textContent = '[' + status + ']';
+      stEl.className = status;
+      if (s.running) {
+        startBtn.disabled = true; stopBtn.disabled = false;
+        if (progEl) progEl.innerHTML = '<span class="spinner"></span>' + (s.events_generated||0) + ' events (' + (s.progress_pct||0) + '%)';
+      } else {
+        startBtn.disabled = false; stopBtn.disabled = true;
+        if (progEl && s.completed) progEl.textContent = 'Done: ' + (s.events_generated||0) + ' events';
+        else if (progEl) progEl.textContent = '';
+      }
+    });
+    var pre = document.getElementById('events-preview');
+    var lines = [];
+    (d.recent_events||[]).forEach(function(e){ lines.push(JSON.stringify(e)); });
+    pre.textContent = lines.join('\\n') || 'No events yet.';
+  });
+}
+setInterval(autoRefresh, 2000);
+</script>
 </body></html>"""
+
 
 @app.route("/")
 def index():
@@ -240,10 +315,10 @@ def stop_scenario():
 
 @app.route("/status")
 def status():
-    result = {}
+    result = {"scenarios": {}}
     for name, state in _active.items():
         cfg = SCENARIOS[name]
-        result[name] = {
+        result["scenarios"][name] = {
             "running": state.get("running", False),
             "completed": state.get("completed", False),
             "speed": state.get("speed", 1),
@@ -254,6 +329,7 @@ def status():
         }
     with _buffer_lock:
         result["_total_events_buffered"] = len(_event_buffer)
+        result["recent_events"] = [{k: v for k, v in evt.items() if k != "_sent"} for evt in _event_buffer[-10:]]
     return jsonify(result)
 
 # ── Main ─────────────────────────────────────────────────────

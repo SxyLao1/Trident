@@ -71,15 +71,25 @@ class HashEngine:
         self._init()
 
     def _init(self):
-        # Track 1: ssdeep
+        # Track 1: ssdeep (C library, best performance)
         try:
             import ssdeep
             self._ssdeep = ssdeep
             self._active_track = "ssdeep"
-            logger.info("[HASH] ssdeep loaded (Track 1)")
+            logger.info("[HASH] ssdeep loaded (Track 1 — C)")
             return
         except ImportError:
-            logger.info("[HASH] ssdeep not available, trying py-tlsh")
+            logger.info("[HASH] ssdeep C library not available, trying ppdeep")
+
+        # Track 1.5: ppdeep (pure Python CTPH, same algorithm as ssdeep)
+        try:
+            import ppdeep
+            self._ssdeep = ppdeep  # same API, same output format
+            self._active_track = "ppdeep"
+            logger.info("[HASH] ppdeep loaded (Track 1.5 — pure Python CTPH)")
+            return
+        except ImportError:
+            logger.info("[HASH] ppdeep not available, trying py-tlsh")
 
         # Track 2: py-tlsh
         try:
