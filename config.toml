@@ -1,5 +1,5 @@
 [system]
-version = "1.8.4-dev"
+version = "1.9.5-dev"
 release_date = "TBD"
 
 project_root = "." # 项目根目录（辅助配置）
@@ -490,6 +490,65 @@ flask_log_rotation_mb = 10
 
 # 备份数量
 flask_log_backup_count = 5
+
+# ============================================================================
+# v1.9.2: 存储后端配置
+# ============================================================================
+[storage]
+# 存储后端: "json" (默认) | "sqlite" (WAL模式高性能) | "both" (双写: JSON兜底 + SQLite优先读)
+backend = "both"   # 双写模式: JSON兜底 + SQLite优先读
+# SQLite 数据库文件路径 (backend = "sqlite" 或 "both" 时生效)
+db_path = "data/trident.db"
+
+# ============================================================================
+# v1.9.3: 插件系统配置
+# ============================================================================
+[plugins]
+# 插件系统总开关
+enabled = true    # v1.9.5: 启用插件系统
+
+# 内置插件列表（PluginManager 启动时自动加载）
+# 可用: stdout_logger, waf_adapters.modsecurity, waf_adapters.cloudflare,
+#       waf_adapters.aws_waf, waf_adapters.syslog_waf
+builtin = [
+    "stdout_logger",
+]
+
+# 单插件配置
+[plugins.stdout_logger]
+color = true
+verbose = false
+
+# WAF 适配器 — ModSecurity JSON 审计日志
+[plugins.modsecurity]
+enabled = false
+audit_log_path = "/var/log/modsec_audit.log"
+poll_interval = 5
+min_score = 5.0
+
+# WAF 适配器 — Cloudflare GraphQL API
+[plugins.cloudflare]
+enabled = false
+zone_id = "${CLOUDFLARE_ZONE_ID:-}"
+api_token = "${CLOUDFLARE_API_TOKEN:-}"
+poll_interval = 60
+lookback_minutes = 5
+
+# WAF 适配器 — AWS WAFv2 CloudWatch Logs
+[plugins.aws_waf]
+enabled = false
+region = "us-east-1"
+web_acl_arn = ""
+log_source = "cloudwatch"
+log_group = "/aws/waf/logs"
+poll_interval = 300
+
+# WAF 适配器 — Syslog UDP 接收器 (CEF/ModSecurity/Cloudflare)
+[plugins.syslog_waf]
+enabled = false
+host = "0.0.0.0"
+port = 514
+format = "cef"
 
 [scanner.yara]
 enabled = true

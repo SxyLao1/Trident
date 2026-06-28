@@ -104,9 +104,30 @@ See `requirements.txt` for the full list.
 - Generate a strong admin password via `python tools/admin_passwd.py`
 - Use HTTPS when exposing to public networks
 
+## Ecosystem & Related Projects
+
+Trident is designed to complement these excellent open-source tools:
+
+**Memory Shell Detection** (bundled in `tools/memory-shell/`):
+- [c0ny1/java-memshell-scanner](https://github.com/c0ny1/java-memshell-scanner) — JSP-based Tomcat/Jetty/WebLogic memory shell scanner
+- [yzddmr6/As-Exploits](https://github.com/yzddmr6/As-Exploits) — ASP.NET memory shell scanner (VirtualPath/Filter/Router)
+- [private-xss/memory-shell-detector](https://github.com/private-xss/memory-shell-detector) — Java GUI+CLI memshell detector (MIT)
+- [4ra1n/shell-analyzer](https://github.com/4ra1n/shell-analyzer) — GUI JVM monitor with decompile & kill
+- [y1shiny1shin/KMBA](https://github.com/y1shiny1shin/KMBA) — Arthas-based memshell killer (12 types)
+
+**WAF / Log Analysis**:
+- [SpiderLabs/ModSecurity](https://github.com/SpiderLabs/ModSecurity) — WAF engine (Trident ingests audit logs)
+- [SpiderLabs/owasp-modsecurity-crs](https://github.com/SpiderLabs/owasp-modsecurity-crs) — OWASP Core Rule Set
+
+**Hashing & Similarity**:
+- [ssdeep-project/ssdeep](https://github.com/ssdeep-project/ssdeep) — CTPH fuzzy hashing (C implementation)
+- [trendmicro/tlsh](https://github.com/trendmicro/tlsh) — Trend Micro Locality Sensitive Hash
+
 ## License
 
 MIT License. Free for production, academic research, and personal use.
+
+Third-party tools bundled in `tools/` retain their original licenses. See `tools/memory-shell/README.md` for attribution details.
 
 ---
 

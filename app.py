@@ -190,6 +190,18 @@ def main():
     threat_graph = get_threat_graph()
     _log('OK', 'PROFILE', 'ThreatGraph initialized')
 
+    # v1.9.3: 插件系统初始化
+    try:
+        from core.plugin_manager import init_plugins
+        pm = init_plugins(ConfigRegistry.get_raw_config())
+        if pm.is_enabled:
+            plugins = pm.list_all()
+            _log('OK', 'PLUGINS', f'{len(plugins)} plugin(s) loaded: {", ".join(p["name"] for p in plugins)}')
+        else:
+            _log('WARN', 'PLUGINS', 'Plugin system disabled (set [plugins] enabled = true)')
+    except Exception as e:
+        _log('WARN', 'PLUGINS', f'Plugin init failed: {e}')
+
     # v1.8.1: 画像引擎消费 WAF 事件（后台线程从 JSONL 缓存读取）
     def _profile_consumer_loop():
         cache_path = normalize_path("data/waf_events.jsonl")

@@ -32,6 +32,11 @@
   <script src="{{ url_for('static', filename='js/sse-manager.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/cyber-effects.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
+  <!-- v1.9.1: 按页面拆分的模块（defer 保证在 dashboard.js 之后加载，使 _escHtml/_escJs 可用） -->
+  <script src="{{ url_for('static', filename='js/modules/scanner.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/modules/blocklist.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/modules/profiles.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/modules/records.js') }}" defer></script>
   <meta name="trident-version" content="{{ trident_version }}" hidden>
 </head>
 <body>

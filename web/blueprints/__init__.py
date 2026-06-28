@@ -14,19 +14,29 @@ if TYPE_CHECKING:
 
 
 def register_blueprints(app: 'Flask'):
-    """注册所有Blueprint"""
-    # 注册Metrics Blueprint
+    """注册所有Blueprint — v1.9.0 拆分后共 9 个独立 Blueprint"""
+    # 核心 Blueprint（Metrics / Admin / YARA / Quarantine）
     from web.blueprints.metrics import metrics_bp
     app.register_blueprint(metrics_bp)
 
-    # 注册Admin Blueprint
     from web.blueprints.admin_bp import admin_bp
     app.register_blueprint(admin_bp)
 
-    # 注册YARA Blueprint
     from web.blueprints.yara_bp import yara_bp
     app.register_blueprint(yara_bp)
 
-    # v1.7.9: 注册Quarantine Blueprint
     from web.blueprints.quarantine_bp import quarantine_bp
     app.register_blueprint(quarantine_bp)
+
+    # v1.9.0: 拆分 Blueprint（从 admin_bp.py 分离）
+    from web.blueprints.scanner_bp import scanner_bp
+    app.register_blueprint(scanner_bp)
+
+    from web.blueprints.blocklist_bp import blocklist_bp
+    app.register_blueprint(blocklist_bp)
+
+    from web.blueprints.profiles_bp import profiles_bp
+    app.register_blueprint(profiles_bp)
+
+    from web.blueprints.records_bp import records_bp
+    app.register_blueprint(records_bp)

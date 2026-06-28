@@ -1,0 +1,232 @@
+# -*- coding: utf-8 -*-
+"""
+v1.9.3: Trident Plugin Manager
+
+插件生命周期管理：加载 → 激活 → 事件分发 → 停用。
+通过 config.toml [plugins] 控制启停。
+
+架构：
+  PluginManager (单例)
+    ├── 内置插件 (plugins/ 目录)
+    │   ├── stdout_logger    — 将事件输出到终端
+    │   └── ...              — 更多内置插件
+    └── 第三方插件 (pip install)
+"""
+import importlib
+import logging
+import threading
+from typing import Dict, List, Optional, Any
+
+from core.interfaces.plugin import Plugin, DomainEvent
+from core.interfaces.detector import Detector
+from core.interfaces.notifier import Notifier, AlertMessage
+from core.interfaces.event_source import EventSource
+from core.interfaces.repository import Repository
+
+logger = logging.getLogger(__name__)
+
+
+class PluginManager:
+    """插件管理器 — 单例，管理所有插件的生命周期"""
+
+    _instance: Optional["PluginManager"] = None
+    _lock = threading.Lock()
+
+    def __init__(self):
+        self._plugins: Dict[str, Plugin] = {}           # name → Plugin 实例
+        self._detectors: Dict[str, Detector] = {}       # name → Detector
+        self._notifiers: Dict[str, Notifier] = {}       # name → Notifier
+        self._event_sources: Dict[str, EventSource] = {} # name → EventSource
+        self._event_handlers: Dict[str, List[Plugin]] = {}  # event_type → [plugins]
+        self._enabled: bool = False
+        self._config: Dict[str, Any] = {}
+
+    @classmethod
+    def get_instance(cls) -> "PluginManager":
+        """获取单例"""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = cls()
+        return cls._instance
+
+    # ── 初始化 ──────────────────────────────────────────
+
+    def init_from_config(self, config: Dict[str, Any]) -> None:
+        """从配置初始化插件系统"""
+        plugin_cfg = config.get("plugins", {})
+        self._enabled = plugin_cfg.get("enabled", False)
+        self._config = plugin_cfg
+
+        if not self._enabled:
+            logger.info("PluginManager: 插件系统已关闭（设置 [plugins] enabled = true 启用）")
+            return
+
+        # 加载内置插件
+        builtin_plugins = plugin_cfg.get("builtin", [])
+        for name in builtin_plugins:
+            self._load_builtin(name)
+
+        logger.info(
+            "PluginManager: 初始化完成 — %d 插件已加载 (%d detector, %d notifier, %d event_source)",
+            len(self._plugins), len(self._detectors),
+            len(self._notifiers), len(self._event_sources),
+        )
+
+    # ── 注册 / 卸载 ────────────────────────────────────
+
+    def register(self, plugin: Plugin) -> bool:
+        """注册插件并激活"""
+        if not self._enabled:
+            return False
+        name = plugin.name
+        if name in self._plugins:
+            logger.warning("PluginManager: 插件 '%s' 已注册，跳过", name)
+            return False
+
+        try:
+            plugin_config = self._config.get(name, {})
+            plugin.activate(plugin_config)
+            self._plugins[name] = plugin
+
+            # 分类注册
+            if isinstance(plugin, Detector):
+                self._detectors[name] = plugin
+            if isinstance(plugin, Notifier):
+                self._notifiers[name] = plugin
+            if isinstance(plugin, EventSource):
+                self._event_sources[name] = plugin
+
+            # 注册事件订阅
+            for event_type in plugin.supported_events:
+                self._event_handlers.setdefault(event_type, []).append(plugin)
+
+            logger.info("PluginManager: 插件 '%s' v%s 已注册", name, plugin.version)
+            return True
+        except Exception as e:
+            logger.error("PluginManager: 插件 '%s' 激活失败: %s", name, e)
+            return False
+
+    def unregister(self, name: str) -> bool:
+        """卸载插件"""
+        plugin = self._plugins.pop(name, None)
+        if plugin is None:
+            return False
+        try:
+            plugin.deactivate()
+        except Exception as e:
+            logger.error("PluginManager: 插件 '%s' 停用失败: %s", name, e)
+        self._detectors.pop(name, None)
+        self._notifiers.pop(name, None)
+        self._event_sources.pop(name, None)
+        for handlers in self._event_handlers.values():
+            handlers[:] = [h for h in handlers if h.name != name]
+        logger.info("PluginManager: 插件 '%s' 已卸载", name)
+        return True
+
+    # ── 事件分发 ────────────────────────────────────────
+
+    def dispatch(self, event: DomainEvent) -> List[DomainEvent]:
+        """分发事件到所有订阅插件，返回产生的新事件链"""
+        if not self._enabled:
+            return []
+        new_events: List[DomainEvent] = []
+        handlers = self._event_handlers.get(event.event_type, [])
+        for plugin in handlers:
+            try:
+                result = plugin.on_event(event)
+                if result:
+                    new_events.extend(result)
+            except Exception as e:
+                logger.error("PluginManager: 插件 '%s' 处理事件 '%s' 失败: %s",
+                           plugin.name, event.event_type, e)
+        return new_events
+
+    def emit(self, event_type: str, source: str, payload: Dict[str, Any]) -> List[DomainEvent]:
+        """便捷方法：创建并分发事件"""
+        import time
+        event = DomainEvent(
+            event_type=event_type,
+            timestamp=time.time(),
+            source=source,
+            payload=payload,
+        )
+        return self.dispatch(event)
+
+    # ── 查询 ────────────────────────────────────────────
+
+    @property
+    def detectors(self) -> Dict[str, Detector]:
+        return dict(self._detectors)
+
+    @property
+    def notifiers(self) -> Dict[str, Notifier]:
+        return dict(self._notifiers)
+
+    @property
+    def event_sources(self) -> Dict[str, EventSource]:
+        return dict(self._event_sources)
+
+    @property
+    def is_enabled(self) -> bool:
+        return self._enabled
+
+    def list_all(self) -> List[Dict[str, Any]]:
+        """列出所有已注册插件"""
+        result = []
+        for name, p in self._plugins.items():
+            result.append({
+                "name": name,
+                "version": p.version,
+                "type": type(p).__bases__[0].__name__ if type(p).__bases__ else "Plugin",
+                "events": p.supported_events,
+            })
+        return result
+
+    def shutdown(self) -> None:
+        """停用所有插件"""
+        for name in list(self._plugins.keys()):
+            self.unregister(name)
+        logger.info("PluginManager: 所有插件已停用")
+
+    # ── 内部 ────────────────────────────────────────────
+
+    def _load_builtin(self, name: str) -> Optional[Plugin]:
+        """加载内置插件（从 plugins/ 目录）"""
+        try:
+            module = importlib.import_module(f"plugins.{name}")
+            # 查找模块中第一个 Plugin 子类
+            plugin_cls = None
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if (isinstance(attr, type) and
+                    issubclass(attr, Plugin) and
+                    attr is not Plugin):
+                    plugin_cls = attr
+                    break
+            if plugin_cls is None:
+                logger.warning("PluginManager: 内置插件 '%s' 未找到 Plugin 子类", name)
+                return None
+            instance = plugin_cls()
+            self.register(instance)
+            return instance
+        except ImportError:
+            logger.info("PluginManager: 内置插件 '%s' 未安装或不可用", name)
+            return None
+        except Exception as e:
+            logger.error("PluginManager: 加载内置插件 '%s' 失败: %s", name, e)
+            return None
+
+
+# ── 便捷函数 ──────────────────────────────────────────
+
+def get_plugin_manager() -> PluginManager:
+    """获取插件管理器单例"""
+    return PluginManager.get_instance()
+
+
+def init_plugins(config: Dict[str, Any]) -> PluginManager:
+    """初始化插件系统（app.py 启动时调用）"""
+    pm = get_plugin_manager()
+    pm.init_from_config(config)
+    return pm
