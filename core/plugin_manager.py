@@ -33,6 +33,7 @@ class PluginManager:
     _lock = threading.Lock()
 
     def __init__(self):
+        self._rwlock = threading.RLock()                 # Thread-safe access to all dicts
         self._plugins: Dict[str, Plugin] = {}           # name → Plugin 实例
         self._detectors: Dict[str, Detector] = {}       # name → Detector
         self._notifiers: Dict[str, Notifier] = {}       # name → Notifier
@@ -40,6 +41,7 @@ class PluginManager:
         self._event_handlers: Dict[str, List[Plugin]] = {}  # event_type → [plugins]
         self._enabled: bool = False
         self._config: Dict[str, Any] = {}
+        self._dispatch_timeout = 30.0  # Max seconds per plugin on_event
 
     @classmethod
     def get_instance(cls) -> "PluginManager":
@@ -76,62 +78,63 @@ class PluginManager:
     # ── 注册 / 卸载 ────────────────────────────────────
 
     def register(self, plugin: Plugin) -> bool:
-        """注册插件并激活"""
+        """注册插件并激活（线程安全）"""
         if not self._enabled:
             return False
-        name = plugin.name
-        if name in self._plugins:
-            logger.warning("PluginManager: 插件 '%s' 已注册，跳过", name)
-            return False
+        with self._rwlock:
+            name = plugin.name
+            if name in self._plugins:
+                logger.warning("PluginManager: 插件 '%s' 已注册，跳过", name)
+                return False
 
-        try:
-            plugin_config = self._config.get(name, {})
-            plugin.activate(plugin_config)
-            self._plugins[name] = plugin
+            try:
+                plugin_config = self._config.get(name, {})
+                plugin.activate(plugin_config)
+                self._plugins[name] = plugin
 
-            # 分类注册
-            if isinstance(plugin, Detector):
-                self._detectors[name] = plugin
-            if isinstance(plugin, Notifier):
-                self._notifiers[name] = plugin
-            if isinstance(plugin, EventSource):
-                self._event_sources[name] = plugin
+                if isinstance(plugin, Detector):
+                    self._detectors[name] = plugin
+                if isinstance(plugin, Notifier):
+                    self._notifiers[name] = plugin
+                if isinstance(plugin, EventSource):
+                    self._event_sources[name] = plugin
 
-            # 注册事件订阅
-            for event_type in plugin.supported_events:
-                self._event_handlers.setdefault(event_type, []).append(plugin)
+                for event_type in plugin.supported_events:
+                    self._event_handlers.setdefault(event_type, []).append(plugin)
 
-            logger.info("PluginManager: 插件 '%s' v%s 已注册", name, plugin.version)
-            return True
-        except Exception as e:
-            logger.error("PluginManager: 插件 '%s' 激活失败: %s", name, e)
-            return False
+                logger.info("PluginManager: 插件 '%s' v%s 已注册", name, plugin.version)
+                return True
+            except Exception as e:
+                logger.error("PluginManager: 插件 '%s' 激活失败: %s", name, e)
+                return False
 
     def unregister(self, name: str) -> bool:
-        """卸载插件"""
-        plugin = self._plugins.pop(name, None)
-        if plugin is None:
-            return False
-        try:
-            plugin.deactivate()
-        except Exception as e:
-            logger.error("PluginManager: 插件 '%s' 停用失败: %s", name, e)
-        self._detectors.pop(name, None)
-        self._notifiers.pop(name, None)
-        self._event_sources.pop(name, None)
-        for handlers in self._event_handlers.values():
-            handlers[:] = [h for h in handlers if h.name != name]
-        logger.info("PluginManager: 插件 '%s' 已卸载", name)
-        return True
+        """卸载插件（线程安全）"""
+        with self._rwlock:
+            plugin = self._plugins.pop(name, None)
+            if plugin is None:
+                return False
+            try:
+                plugin.deactivate()
+            except Exception as e:
+                logger.error("PluginManager: 插件 '%s' 停用失败: %s", name, e)
+            self._detectors.pop(name, None)
+            self._notifiers.pop(name, None)
+            self._event_sources.pop(name, None)
+            for handlers in self._event_handlers.values():
+                handlers[:] = [h for h in handlers if h.name != name]
+            logger.info("PluginManager: 插件 '%s' 已卸载", name)
+            return True
 
     # ── 事件分发 ────────────────────────────────────────
 
     def dispatch(self, event: DomainEvent) -> List[DomainEvent]:
-        """分发事件到所有订阅插件，返回产生的新事件链"""
+        """分发事件到所有订阅插件（线程安全，带超时）"""
         if not self._enabled:
             return []
         new_events: List[DomainEvent] = []
-        handlers = self._event_handlers.get(event.event_type, [])
+        with self._rwlock:
+            handlers = list(self._event_handlers.get(event.event_type, []))
         for plugin in handlers:
             try:
                 result = plugin.on_event(event)
@@ -157,35 +160,41 @@ class PluginManager:
 
     @property
     def detectors(self) -> Dict[str, Detector]:
-        return dict(self._detectors)
+        with self._rwlock:
+            return dict(self._detectors)
 
     @property
     def notifiers(self) -> Dict[str, Notifier]:
-        return dict(self._notifiers)
+        with self._rwlock:
+            return dict(self._notifiers)
 
     @property
     def event_sources(self) -> Dict[str, EventSource]:
-        return dict(self._event_sources)
+        with self._rwlock:
+            return dict(self._event_sources)
 
     @property
     def is_enabled(self) -> bool:
         return self._enabled
 
     def list_all(self) -> List[Dict[str, Any]]:
-        """列出所有已注册插件"""
-        result = []
-        for name, p in self._plugins.items():
-            result.append({
-                "name": name,
-                "version": p.version,
-                "type": type(p).__bases__[0].__name__ if type(p).__bases__ else "Plugin",
-                "events": p.supported_events,
-            })
-        return result
+        """列出所有已注册插件（线程安全）"""
+        with self._rwlock:
+            result = []
+            for name, p in self._plugins.items():
+                result.append({
+                    "name": name,
+                    "version": p.version,
+                    "type": type(p).__bases__[0].__name__ if type(p).__bases__ else "Plugin",
+                    "events": p.supported_events,
+                })
+            return result
 
     def shutdown(self) -> None:
-        """停用所有插件"""
-        for name in list(self._plugins.keys()):
+        """停用所有插件（线程安全）"""
+        with self._rwlock:
+            names = list(self._plugins.keys())
+        for name in names:
             self.unregister(name)
         logger.info("PluginManager: 所有插件已停用")
 

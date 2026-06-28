@@ -1,117 +1,290 @@
 # -*- coding: utf-8 -*-
-"""v1.9.5: Memory Shell Tracer"""
+"""
+v1.9.5: Memory Shell Tracer — Fixed code quality (v1.9.5.1)
+
+When a memory shell is detected, trace back through access logs
+to find the original WebShell file that deployed it.
+
+Chain: memory shell detection -> access log analysis -> file match -> CRITICAL alert
+
+Changes from audit (v1.9.5):
+  - Replaced self -> s with proper self convention
+  - Replaced bare except: pass with explicit Exception + logger.debug
+  - Replaced single-letter variable names with descriptive names
+  - Fixed timezone handling: normalize to UTC instead of strip tzinfo
+  - Added docstrings to all methods
+"""
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, List, Dict
+
 from core.log_heuristic import parse_log_line
+
 logger = logging.getLogger(__name__)
-_DEF_LB = 24
-_WM = {'POST','PUT','PATCH','MKCOL'}
-_EX = {'.php','.php5','.phtml','.asp','.aspx','.ashx','.jsp','.jspx','.war','.jar'}
-_SD = ['/uploads/','/upload/','/files/','/images/','/wp-content/uploads/','/wp-admin/','/admin/','/tmp/','/druid/']
+
+DEFAULT_LOOKBACK_HOURS = 24
+WRITE_METHODS = {"POST", "PUT", "PATCH", "MKCOL"}
+WEBSHELL_EXTENSIONS = {".php", ".php5", ".phtml", ".asp", ".aspx", ".ashx",
+                       ".jsp", ".jspx", ".war", ".jar"}
+SUSPICIOUS_DIRECTORIES = ["/uploads/", "/upload/", "/files/", "/images/",
+                          "/wp-content/uploads/", "/wp-admin/", "/admin/",
+                          "/tmp/", "/druid/"]
+
+
 class MemoryShellTracer:
-    def __init__(s, lookback_hours=_DEF_LB): s._lb = lookback_hours
-    def trace(s, ip, dt=None, log_paths=None):
-        if dt is None: dt = datetime.now()
-        start = dt - timedelta(hours=s._lb)
-        if log_paths is None: log_paths = s._def_logs()
+    """Trace memory shell detections back to origin via access logs."""
+
+    def __init__(self, lookback_hours: int = DEFAULT_LOOKBACK_HOURS):
+        self._lookback_hours = lookback_hours
+
+    def trace(self, ip: str, detection_time: Optional[datetime] = None,
+              log_paths: Optional[List[Path]] = None) -> Dict:
+        """Trace an IP's activity before memory shell detection.
+
+        Returns dict with keys: found, ip, time, lb, total, writes,
+        candidates, matched, confidence, summary.
+        """
+        if detection_time is None:
+            detection_time = datetime.now(timezone.utc)
+        start_time = detection_time - timedelta(hours=self._lookback_hours)
+
+        if log_paths is None:
+            log_paths = self._default_log_paths()
+
+        all_entries = []
+        for log_path in log_paths:
+            if not log_path.exists():
+                continue
+            entries = self._extract_entries(log_path, ip, start_time, detection_time)
+            all_entries.extend(entries)
+
+        write_entries = [e for e in all_entries
+                         if e.get("method", "").upper() in WRITE_METHODS]
+        candidates = self._rank_candidates(write_entries)
+        matched = self._cross_reference(candidates)
+
+        confidence = "high" if matched else ("medium" if candidates else "low")
+        return {
+            "found": len(candidates) > 0,
+            "ip": ip,
+            "time": detection_time.isoformat(),
+            "lb": self._lookback_hours,
+            "total": len(all_entries),
+            "writes": len(write_entries),
+            "candidates": candidates[:20],
+            "matched": matched,
+            "confidence": confidence,
+            "summary": self._summarize(ip, len(candidates), matched),
+        }
+
+    def _extract_entries(self, log_path: Path, ip: str,
+                         start: datetime, end: datetime) -> List[Dict]:
+        """Extract all log entries for a specific IP within a time window."""
         entries = []
-        for lp in log_paths:
-            if not lp.exists(): continue
-            for e in s._extract(lp, ip, start, dt): entries.append(e)
-        writes = [e for e in entries if e.get('method','').upper() in _WM]
-        cands = s._rank(writes)
-        m = s._xref(cands)
-        conf = 'high' if m else ('medium' if cands else 'low')
-        return {'found':len(cands)>0,'ip':ip,'time':dt.isoformat(),'lb':s._lb,'total':len(entries),'writes':len(writes),'candidates':cands[:20],'matched':m,'confidence':conf,'summary':s._sum(ip,len(cands),m)}
-    def _extract(s, lp, ip, start, end):
-        res = []
-        with open(lp,'r',encoding='utf-8',errors='replace') as f:
-            for line in f:
-                line=line.strip()
-                if not line or ip not in line: continue
-                p = parse_log_line(line)
-                if not p or p.get('ip')!=ip: continue
-                try:
-                    ts = s._pts(p.get('timestamp',''))
-                    if ts and start<=ts<=end: res.append({**p,'_ts':ts})
-                except: pass
-        res.sort(key=lambda x:x.get('_ts',datetime.min))
-        return res
-    def _rank(s, entries):
-        scored,seen = [],set()
-        for e in entries:
-            path=e.get('path',''); ext=Path(path).suffix.lower(); m=e.get('method','').upper(); st=e.get('status',0)
-            sc=0
-            if ext in _EX: sc+=3
-            if any(d in path.lower() for d in _SD): sc+=2
-            if 200<=st<300: sc+=1
-            if st==201: sc+=2
-            if m=='POST' and ext in _EX: sc+=2
-            if sc>0:
-                k=f'{path}|{m}'
-                if k not in seen: seen.add(k); scored.append({'path':path,'method':m,'ts':e.get('timestamp',''),'status':st,'score':sc,'ua':e.get('user_agent','')[:200]})
-        scored.sort(key=lambda x:x['score'],reverse=True)
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or ip not in line:
+                        continue
+                    parsed = parse_log_line(line)
+                    if not parsed or parsed.get("ip") != ip:
+                        continue
+                    try:
+                        timestamp = self._parse_timestamp(parsed.get("timestamp", ""))
+                        if timestamp and start <= timestamp <= end:
+                            entries.append({**parsed, "_parsed_ts": timestamp})
+                    except Exception as exc:
+                        logger.debug("MemoryShellTracer: failed to parse line: %s...: %s",
+                                    line[:100], exc)
+        except OSError as exc:
+            logger.warning("MemoryShellTracer: failed to read %s: %s", log_path, exc)
+        entries.sort(key=lambda e: e.get("_parsed_ts", datetime.min))
+        return entries
+
+    def _rank_candidates(self, entries: List[Dict]) -> List[Dict]:
+        """Score and rank entries by likelihood of being a WebShell upload."""
+        scored = []
+        seen_keys = set()
+        for entry in entries:
+            path = entry.get("path", "")
+            ext = Path(path).suffix.lower()
+            method = entry.get("method", "").upper()
+            status = entry.get("status", 0)
+
+            score = 0
+            if ext in WEBSHELL_EXTENSIONS:
+                score += 3
+            if any(directory in path.lower() for directory in SUSPICIOUS_DIRECTORIES):
+                score += 2
+            if 200 <= status < 300:
+                score += 1  # Successful HTTP response
+            if status == 201:
+                score += 2  # Resource created
+            if method == "POST" and ext in WEBSHELL_EXTENSIONS:
+                score += 2  # POST to executable extension = high confidence
+
+            if score > 0:
+                dedup_key = f"{path}|{method}"
+                if dedup_key not in seen_keys:
+                    seen_keys.add(dedup_key)
+                    scored.append({
+                        "path": path,
+                        "method": method,
+                        "timestamp": entry.get("timestamp", ""),
+                        "status": status,
+                        "score": score,
+                        "user_agent": entry.get("user_agent", "")[:200],
+                    })
+
+        scored.sort(key=lambda x: x["score"], reverse=True)
         return scored
-    def _xref(s, cands):
-        if not cands: return None
+
+    def _cross_reference(self, candidates: List[Dict]) -> Optional[Dict]:
+        """Cross-reference upload candidates with Trident's detection records."""
+        if not candidates:
+            return None
         try:
             from core.suspicious_registry import get_all
-            recs=get_all(include_deleted=False); known={r.get('file_path',''):r for r in recs}
-            for c in cands:
-                p=c['path']
-                if p in known:
-                    r=known[p]; return {'fp':p,'detected':r.get('detected_at',''),'feat':r.get('features',[]),'qid':r.get('quarantine_id',''),'match':'exact'}
-                n=p.replace('/','')
-                for k,v in known.items():
-                    if k.endswith(n) or n.endswith(k.replace('/','')): return {'fp':k,'detected':v.get('detected_at',''),'feat':v.get('features',[]),'qid':v.get('quarantine_id',''),'match':'partial'}
-        except Exception as e: logger.warning('xref: %s',e)
+            records = get_all(include_deleted=False)
+            known_paths = {r.get("file_path", ""): r for r in records}
+
+            for candidate in candidates:
+                path = candidate["path"]
+                if path in known_paths:
+                    rec = known_paths[path]
+                    return {
+                        "fp": path,
+                        "detected": rec.get("detected_at", ""),
+                        "feat": rec.get("features", []),
+                        "qid": rec.get("quarantine_id", ""),
+                        "match": "exact",
+                    }
+                # Try normalized path match (Windows backslash / Unix forward slash)
+                normalized = path.replace("/", "\\")
+                for known_path, record in known_paths.items():
+                    if known_path.endswith(normalized) or normalized.endswith(
+                        known_path.replace("/", "\\")):
+                        return {
+                            "fp": known_path,
+                            "detected": record.get("detected_at", ""),
+                            "feat": record.get("features", []),
+                            "qid": record.get("quarantine_id", ""),
+                            "match": "partial",
+                        }
+        except Exception as exc:
+            logger.warning("MemoryShellTracer: cross-reference failed: %s", exc)
         return None
-    def _def_logs(s):
-        ps=[]
+
+    def _default_log_paths(self) -> List[Path]:
+        """Get default access log paths from config or common locations."""
+        paths = []
         try:
             from config.registry import ConfigRegistry
-            lp=ConfigRegistry.get_raw_config().get('website',{}).get('log_config',{}).get('access_log_path','')
-            if lp: ps.append(Path(lp))
-        except: pass
-        for p in ['/var/log/nginx/access.log','/var/log/apache2/access.log']:
-            c=Path(p)
-            if c.exists() and c not in ps: ps.append(c)
-        return ps
-    def _pts(s,ts):
-        for f in ['%d/%b/%Y:%H:%M:%S %z','%Y-%m-%d %H:%M:%S','%Y-%m-%dT%H:%M:%S']:
-            try:
-                dt = datetime.strptime(ts,f)
-                return dt.replace(tzinfo=None)  # strip tz for naive comparison
-            except: continue
-        try: return datetime.strptime(ts[:19],'%Y-%m-%dT%H:%M:%S')
-        except: return None
-    def _sum(s,ip,n,m):
-        if m: return 'Memory shell traced to ' + m['fp']
-        if n: return str(n) + ' suspicious uploads, none matched'
-        return 'No upload activity found'
+            log_path = ConfigRegistry.get_raw_config().get(
+                "website", {}).get("log_config", {}).get("access_log_path", "")
+            if log_path:
+                paths.append(Path(log_path))
+        except Exception as exc:
+            logger.debug("MemoryShellTracer: config lookup failed: %s", exc)
+        for candidate in ["/var/log/nginx/access.log", "/var/log/apache2/access.log"]:
+            p = Path(candidate)
+            if p.exists() and p not in paths:
+                paths.append(p)
+        return paths
 
-def trace_memory_shell(ip, dt=None, log_paths=None): return MemoryShellTracer().trace(ip, dt, log_paths=log_paths)
-def emit_critical_alert(tr):
+    @staticmethod
+    def _parse_timestamp(timestamp_str: str) -> Optional[datetime]:
+        """Parse common log timestamp formats, normalizing to UTC."""
+        formats = [
+            "%d/%b/%Y:%H:%M:%S %z",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+        ]
+        for fmt in formats:
+            try:
+                dt = datetime.strptime(timestamp_str, fmt)
+                # Normalize to UTC for consistent comparison
+                if dt.tzinfo is not None:
+                    dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+                return dt
+            except ValueError:
+                continue
+        # Fallback: strip timezone and try ISO prefix
+        try:
+            return datetime.strptime(timestamp_str[:19], "%Y-%m-%dT%H:%M:%S")
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _summarize(ip: str, candidate_count: int, matched: Optional[Dict]) -> str:
+        if matched:
+            return f"Memory shell traced to {matched['fp']} (detected {matched['detected']})"
+        if candidate_count > 0:
+            return f"{candidate_count} suspicious upload(s), none matched known records"
+        return "No upload activity found in access logs"
+
+
+def trace_memory_shell(ip: str, detection_time: Optional[datetime] = None,
+                       log_paths: Optional[List[Path]] = None) -> Dict:
+    """Convenience function: one-shot trace."""
+    return MemoryShellTracer().trace(ip, detection_time, log_paths=log_paths)
+
+
+def emit_critical_alert(trace_result: Dict) -> bool:
+    """Emit a CRITICAL alert for a confirmed memory shell detection."""
     try:
-        from core.notifier import get_notifier; import logging as _l
-        n=get_notifier(_l.getLogger('monitor.notifier'))
-        m=tr.get('matched'); t='MEMORY SHELL: ' + (m['fp'].split(chr(92))[-1].split('/')[-1] if m else tr['ip'])
-        lines = ['IP: '+tr['ip'], 'Time: '+tr['time'], 'Confidence: '+tr['confidence'], '']
-        if m:
-            lines += ['WebShell: '+m['fp'], 'Detected: '+m['detected'],
-                      'Features: '+','.join(m['feat']),
-                      'Q: '+('Yes' if m.get('qid') else 'No'), '']
-        if tr.get('candidates'):
-            lines.append('Uploads:')
-            for c in tr['candidates'][:5]:
-                lines.append('  '+c['method']+' '+c['path']+' -> '+str(c['status'])+' (s:'+str(c['score'])+')')
-        b = '\n'.join(lines)
+        from core.notifier import get_notifier
+        import logging as _logging
+        notifier = get_notifier(_logging.getLogger("monitor.notifier"))
+
+        matched = trace_result.get("matched")
+        title = "MEMORY SHELL: "
+        if matched:
+            title += matched["fp"].replace("\\", "/").split("/")[-1]
+        else:
+            title += trace_result["ip"]
+
+        lines = [
+            "IP: " + trace_result["ip"],
+            "Time: " + trace_result["time"],
+            "Confidence: " + trace_result["confidence"],
+            "",
+        ]
+        if matched:
+            lines += [
+                "WebShell: " + matched["fp"],
+                "Detected: " + matched["detected"],
+                "Features: " + ", ".join(matched["feat"]),
+                "Quarantined: " + ("Yes" if matched.get("qid") else "No"),
+                "",
+            ]
+        if trace_result.get("candidates"):
+            lines.append("Upload candidates:")
+            for c in trace_result["candidates"][:5]:
+                lines.append(
+                    f"  {c['method']} {c['path']} -> {c['status']} (score: {c['score']})"
+                )
+
+        body = "\n".join(lines)
+
+        # Emit to SIEM
         try:
             from core.siem_exporter import emit_detection_event
-            emit_detection_event({'id':'ms-'+tr['ip'],'detected_at':tr['time'],'file_path':m.get('fp','') if m else '','features':m.get('feat',[]) if m else [],'source_ip':tr['ip']},category='memory.shell.detected')
-        except: pass
-        n.send_alert(t,b,level='critical')
+            emit_detection_event({
+                "id": "memshell-" + trace_result["ip"],
+                "detected_at": trace_result["time"],
+                "file_path": matched.get("fp", "") if matched else "",
+                "features": matched.get("feat", []) if matched else [],
+                "source_ip": trace_result["ip"],
+            }, category="memory.shell.detected")
+        except Exception as exc:
+            logger.debug("MemoryShellTracer: SIEM emit failed: %s", exc)
+
+        notifier.send_alert(title, body, level="critical")
+        logger.critical("MemoryShellTracer: CRITICAL alert sent for %s", trace_result["ip"])
         return True
-    except Exception as e: logger.error('memshell alert fail: %s',e); return False
+    except Exception as exc:
+        logger.error("MemoryShellTracer: alert failed: %s", exc)
+        return False

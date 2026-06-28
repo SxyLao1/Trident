@@ -195,12 +195,23 @@ class SqliteRepository(EventRepository):
             (limit, offset)).fetchall()
         return [dict(r) for r in rows]
 
+    # Whitelist of allowed query columns (prevents SQL injection via filter keys)
+    _ALLOWED_COLUMNS = {
+        "id", "record_id", "file_path", "display_name", "detected_at",
+        "file_exists", "communication_count", "first_seen_ip", "alerted",
+        "marked_false_positive", "quarantine_id", "deleted_at",
+        "detection_source", "status", "source", "ip", "blocked_by",
+        "broadcast_status",
+    }
+
     def query(self, filters: Dict[str, Any],
               limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         conn = self._get_conn()
         where = []
         params = []
         for k, v in filters.items():
+            if k not in self._ALLOWED_COLUMNS:
+                raise ValueError(f"Invalid filter column: {k}")
             where.append(f"{k}=?")
             params.append(v)
         sql = "SELECT * FROM registry"
