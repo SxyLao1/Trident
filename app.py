@@ -202,6 +202,15 @@ def main():
     except Exception as e:
         _log('WARN', 'PLUGINS', f'Plugin init failed: {e}')
 
+    # v1.9.5: SIEM 导出引擎初始化
+    try:
+        from core.siem_exporter import get_siem_exporter
+        siem = get_siem_exporter()
+        if siem.enabled:
+            _log('OK', 'SIEM', f'Export enabled (format={siem._format}, file={siem._export_path})')
+    except Exception as e:
+        _log('WARN', 'SIEM', f'Export init failed: {e}')
+
     # v1.8.1: 画像引擎消费 WAF 事件（后台线程从 JSONL 缓存读取）
     def _profile_consumer_loop():
         cache_path = normalize_path("data/waf_events.jsonl")

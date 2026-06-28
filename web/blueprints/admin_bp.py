@@ -505,6 +505,44 @@ def settings_notifications_save():
         return jsonify({"error": str(e)}), 500
 
 
+# v1.9.5: SIEM Export endpoints
+@admin_bp.route('/siem/export')
+@require_auth
+def siem_export():
+    """Export detection records as SIEM-formatted events (JSON Lines / CEF)."""
+    fmt = request.args.get('format', '')
+    try:
+        from core.siem_exporter import get_siem_exporter
+        from core.suspicious_registry import get_all
+        exporter = get_siem_exporter()
+        if fmt:
+            exporter._format = fmt
+        records = get_all(include_deleted=False)
+        count = exporter.export_existing(records)
+        export_path = exporter._export_path
+        return jsonify({
+            "success": True,
+            "exported": count,
+            "format": exporter._format,
+            "file": str(export_path),
+            "size_bytes": export_path.stat().st_size if export_path.exists() else 0,
+        })
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] SIEM export failed: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_bp.route('/siem/stats')
+@require_auth
+def siem_stats():
+    """Get SIEM exporter statistics."""
+    try:
+        from core.siem_exporter import get_siem_exporter
+        return jsonify(get_siem_exporter().get_stats())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_bp.route('/dashboard_content')
 @require_auth
 def dashboard_content():

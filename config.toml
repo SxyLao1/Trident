@@ -550,5 +550,24 @@ host = "0.0.0.0"
 port = 514
 format = "cef"
 
+# ============================================================================
+# v1.9.5: SIEM 导出配置
+# ============================================================================
+[siem]
+# SIEM 导出总开关
+enabled = true
+# 导出格式: "json_lines" (推荐) | "cef" (ArcSight/QRadar) | "syslog" (RFC 5424)
+format = "json_lines"
+# JSON Lines 导出文件路径 (append-only, 自动轮转)
+export_file = "data/siem/events.jsonl"
+# 文件轮转阈值 (MB)
+rotate_mb = 100
+# Syslog 实时推送 (format = "syslog" 时生效)
+syslog_host = ""
+syslog_port = 514
+syslog_protocol = "udp"
+# 是否在 SIEM 事件中包含文件样本的前 256 字节 (默认关闭)
+include_raw_sample = false
+
 [scanner.yara]
 enabled = true
