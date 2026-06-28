@@ -355,7 +355,8 @@ class Notifier:
             self.logger.info(f"[NOTIFIER][EMAIL] 发送成功 -> {cfg['to_addrs']}")
 
         except Exception as e:
-            self.logger.warning(f"[NOTIFIER][EMAIL] skipped: {e} (credentials not configured?)")
+            if not self._warned_missing_config:
+                self.logger.warning(f"[NOTIFIER][EMAIL] skipped: credentials not configured"); self._warned_missing_config = True
 
     def _send_wechat(self, message: str, level: str):
         """发送微信告警（Server酱）- 熔断降级版【必须完整替换】"""

@@ -172,8 +172,9 @@ function loadDashboard() {
         if (logStream) {
           logStream.scrollTop = logStream.scrollHeight;
           // Observe new SSE lines and auto-scroll
-          if (!window._logStreamObserver) {
-            window._logStreamObserver = new MutationObserver(function() {
+          if (window._logStreamObserver) { window._logStreamObserver.disconnect(); }
+            // Recreate observer every load (v2.0 fix)
+      window._logStreamObserver = new MutationObserver(function() {
               logStream.scrollTop = logStream.scrollHeight;
             });
             window._logStreamObserver.observe(logStream, { childList: true, subtree: false });
