@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trident"
+version = "1.9.5"
+description = "Cross-Platform WebShell Detection System"
+requires-python = ">=3.8"
+license = "MIT"
+authors = [{name = "SxyLao1"}]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-cov"]
+
+[tool.setuptools]
+packages = ["core", "core.interfaces", "core.repositories", "core.similarity",
+            "core.decay", "web", "web.blueprints", "config", "utils", "plugins"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/core"]
+pythonpath = ["."]

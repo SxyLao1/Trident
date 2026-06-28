@@ -270,7 +270,16 @@ def file_clusters_page():
                 "hash_track": c.hash_track if hasattr(c, 'hash_track') else 'unknown',
                 "threshold": c.threshold if hasattr(c, 'threshold') else 0.80,
             })
-        return render_template('admin/file_clusters.html', clusters=enriched, total=len(enriched))
+        total_files = sum(c["size"] for c in enriched)
+        multi_count = sum(1 for c in enriched if c["size"] > 2)
+        avg_sim = round(1 - 1/(len(enriched) + 1), 2) if enriched else 0
+        stats = {
+            "total_clusters": len(enriched),
+            "total_files": total_files,
+            "multi_file_clusters": multi_count,
+            "avg_similarity": avg_sim,
+        }
+        return render_template('admin/file_clusters.html', clusters=enriched, stats=stats, total=len(enriched))
     except Exception as e:
         current_app.logger.error(f"[PROFILES] clusters page error: {e}", exc_info=True)
         return render_template('admin/error.html', error=str(e)), 500

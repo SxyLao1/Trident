@@ -543,6 +543,72 @@ def siem_stats():
         return jsonify({"error": str(e)}), 500
 
 
+# v1.9.5: Settings panels — SIEM, Storage, Plugin status
+@admin_bp.route('/settings/siem-status')
+@require_auth
+def settings_siem_status():
+    """SIEM export status panel for Settings page."""
+    try:
+        from core.siem_exporter import get_siem_exporter
+        e = get_siem_exporter()
+        s = e.get_stats()
+        from pathlib import Path
+        export_path = Path(s["export_file"])
+        has_data = export_path.exists() and export_path.stat().st_size > 0
+        return render_template('admin/panels/siem_status.html',
+            enabled=s["enabled"], format=s["format"],
+            total_exported=s["total_exported"], file_size_mb=s["file_size_mb"],
+            syslog_active=s["syslog_active"], has_data=has_data,
+            export_file=str(export_path))
+    except Exception as e:
+        return f'<div style="color:#ff4444;">Error: {e}</div>'
+
+
+@admin_bp.route('/settings/storage-status')
+@require_auth
+def settings_storage_status():
+    """Storage backend status panel for Settings page."""
+    try:
+        from config.registry import ConfigRegistry
+        cfg = ConfigRegistry.get_raw_config().get("storage", {})
+        backend = cfg.get("backend", "json")
+        db_path = cfg.get("db_path", "data/trident.db")
+        from pathlib import Path
+        db = Path(db_path)
+        db_exists = db.exists()
+        db_size = round(db.stat().st_size / 1024 / 1024, 2) if db_exists else 0
+        json_size = 0
+        json_files = list(Path("data").glob("*.json"))
+        for f in json_files:
+            if f.exists():
+                json_size += f.stat().st_size
+        json_mb = round(json_size / 1024 / 1024, 2)
+        return render_template('admin/panels/storage_status.html',
+            backend=backend, db_exists=db_exists, db_size=db_size,
+            json_mb=json_mb, json_files=len(json_files))
+    except Exception as e:
+        return f'<div style="color:#ff4444;">Error: {e}</div>'
+
+
+@admin_bp.route('/settings/plugin-status')
+@require_auth
+def settings_plugin_status():
+    """Plugin system status panel for Settings page."""
+    try:
+        from core.plugin_manager import get_plugin_manager
+        pm = get_plugin_manager()
+        plugins = pm.list_all()
+        detector_count = len(pm.detectors)
+        notifier_count = len(pm.notifiers)
+        source_count = len(pm.event_sources)
+        return render_template('admin/panels/plugin_status.html',
+            enabled=pm.is_enabled, plugins=plugins,
+            detector_count=detector_count, notifier_count=notifier_count,
+            source_count=source_count)
+    except Exception as e:
+        return f'<div style="color:#ff4444;">Error: {e}</div>'
+
+
 @admin_bp.route('/dashboard_content')
 @require_auth
 def dashboard_content():

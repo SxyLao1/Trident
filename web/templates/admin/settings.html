@@ -27,6 +27,39 @@
     </div>
   </div>
 
+  <!-- Export & SIEM -->
+  <div class="card">
+    <div class="card-header"><span><span class="card-header-icon">◆</span> EXPORT &amp; SIEM</span></div>
+    <div class="card-body" style="padding: 16px;" id="settings-siem"
+         hx-get="/admin/settings/siem-status"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+    </div>
+  </div>
+
+  <!-- Storage Status -->
+  <div class="card">
+    <div class="card-header"><span><span class="card-header-icon">◆</span> STORAGE</span></div>
+    <div class="card-body" style="padding: 16px;" id="settings-storage"
+         hx-get="/admin/settings/storage-status"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+    </div>
+  </div>
+
+  <!-- Plugin Status -->
+  <div class="card" style="grid-column: 1 / -1;">
+    <div class="card-header"><span><span class="card-header-icon">◆</span> PLUGINS</span></div>
+    <div class="card-body" style="padding: 16px;" id="settings-plugins"
+         hx-get="/admin/settings/plugin-status"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+      <div class="empty-state"><div class="spinner"></div><p>Loading plugin status...</p></div>
+    </div>
+  </div>
+
   <!-- Config Editor (full width) -->
   <div class="card" style="grid-column: 1 / -1;">
     <div class="card-header"><span><span class="card-header-icon">◆</span> CONFIG EDITOR</span></div>
