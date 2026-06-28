@@ -532,8 +532,25 @@ class FileMonitorHandler(FileSystemEventHandler):
                     from anteumbra.infrastructure.suspicious_registry import add, mark_quarantined
                     from anteumbra.infrastructure.quarantine import is_recently_restored
 
-                    # v1.8.4: 本地文件检测——无外网IP时使用127.0.0.1
+                    # v1.8.4: 本地文件检测——尝试从 WAF 日志获取真实攻击IP
                     first_seen_ip = "127.0.0.1"
+                    event_name = event_path.name.lower()
+                    try:
+                        waf_log = Path("data/waf_events.jsonl")
+                        if waf_log.exists():
+                            with open(str(waf_log), 'r', encoding='utf-8') as f:
+                                lines = f.readlines()
+                            for line in reversed(lines[-200:]):
+                                if not line.strip(): continue
+                                evt = json.loads(line.strip())
+                                url = (evt.get("url", "") or "").lower()
+                                if event_name in url or url.endswith(event_name):
+                                    if evt.get("src_ip") and evt["src_ip"] not in ("127.0.0.1", "::1"):
+                                        first_seen_ip = evt["src_ip"]
+                                        self.logger.info(f"[MONITOR] Resolved attacker IP from WAF: {first_seen_ip} -> {event_name}")
+                                        break
+                    except Exception:
+                        pass
 
                     # v1.8.4: 本地文件检测CRITICAL告警——内网边界突破风险
                     self._init_notifier()

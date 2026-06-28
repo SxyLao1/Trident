@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 v1.8.1: 攻击者画像引擎 MVP — ThreatGraph
+"""
+import logging
+logger = logging.getLogger(__name__)
+
+"""
+v1.8.1: 攻击者画像引擎 MVP — ThreatGraph
 从 WAF 事件 + Registry 文件检测中聚类攻击者行为指纹。
 
 核心思路（来自 PROJECT_MASTER 6.x）：
@@ -317,8 +323,10 @@ class ThreatGraph:
             try:
                 from anteumbra.infrastructure.detection.file_cluster import get_file_cluster_engine
                 cluster_id, hash_val = get_file_cluster_engine().cluster_file(file_path)
-            except Exception:
-                pass
+                if cluster_id:
+                    logger.info(f"[PROFILE] File {file_path.rsplit(chr(92),1)[-1]} -> cluster {cluster_id[:8]}")
+            except Exception as e:
+                logger.error(f"[PROFILE] Cluster failed for {file_path}: {e}")
 
             try:
                 ts = datetime.fromisoformat(ts_str) if ts_str else datetime.now()

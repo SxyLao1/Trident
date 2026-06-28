@@ -27,7 +27,7 @@ class FileCluster:
         self.updated_at = datetime.now()
 
     def add_file(self, file_path: str, hash_value: str) -> bool:
-        """添加文件到簇。只在相似度 > 阈值时返回 True"""
+        """添加文件到簇。ppdeep 对小文件效果差，增加内容兜底。"""
         if not self.representative_hash:
             self.representative_hash = hash_value
             self.files[file_path] = hash_value
@@ -35,7 +35,28 @@ class FileCluster:
 
         engine = get_hash_engine()
         sim = engine.compare(self.representative_hash, hash_value)
-        if sim >= 0.80:  # 相似度阈值
+
+        # v2.0: 小文件兜底 — CTPH 对小文件( < 4KB )基本无效
+        if sim < 0.80:
+            try:
+                import os as _os
+                def _safe_stat(p):
+                    try: return _os.path.getsize(p)
+                    except: return 0
+                sz_new = _safe_stat(file_path)
+                first_file = next(iter(self.files.keys()))
+                sz_old = _safe_stat(first_file)
+                if sz_new > 0 and sz_old > 0 and sz_new < 4096 and sz_old < 4096:
+                    if abs(sz_new - sz_old) / max(sz_new, 1) < 0.15:
+                        ext_new = _os.path.splitext(file_path)[1].lower()
+                        ext_old = _os.path.splitext(first_file)[1].lower()
+                        if ext_new == ext_old:
+                            sim = 0.85
+                            logger.info(f"[CLUSTER] Small file fallback: {_os.path.basename(file_path)} ~ {_os.path.basename(first_file)}")
+            except Exception:
+                pass
+
+        if sim >= 0.80:
             self.files[file_path] = hash_value
             self.updated_at = datetime.now()
             return True
