@@ -1,0 +1,139 @@
+<!-- v1.9.0: Scanner Report (printable) -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Scan Report — {{ result.scan_id }}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0a; color: #ccc; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; line-height: 1.6; padding: 20px; }
+  .container { max-width: 1000px; margin: 0 auto; }
+  h1 { color: #00ff41; font-size: 20px; margin-bottom: 4px; }
+  h2 { color: #00ff41; font-size: 14px; margin: 24px 0 12px 0; border-bottom: 1px solid #1a1a1a; padding-bottom: 6px; }
+  .meta { color: #888; font-size: 10px; margin-bottom: 20px; }
+  .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .summary-item { background: #111; border: 1px solid #1a1a1a; border-radius: 4px; padding: 12px; text-align: center; }
+  .summary-item .val { font-size: 22px; font-weight: bold; color: #00ff41; }
+  .summary-item .lbl { font-size: 10px; color: #888; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  th { text-align: left; padding: 6px 10px; border-bottom: 2px solid #1a1a1a; color: #888; font-size: 10px; }
+  td { padding: 5px 10px; border-bottom: 1px solid #111; font-size: 11px; }
+  .badge { padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; }
+  .badge-new { background: #ff4444; color: #000; }
+  .badge-known { background: #ffaa00; color: #000; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 20px; }
+  .toolbar button { background: #1a1a1a; color: #00ff41; border: 1px solid #333; padding: 6px 16px; cursor: pointer; font-family: inherit; font-size: 11px; border-radius: 4px; }
+  .toolbar button:hover { background: #222; }
+  @media print {
+    body { background: #fff; color: #000; }
+    .toolbar { display: none; }
+    h1, h2 { color: #000; }
+    .badge-new { background: #ff4444; color: #fff; }
+    .badge-known { background: #ffaa00; color: #000; }
+    .summary-item { border-color: #ccc; }
+    th { border-bottom-color: #ccc; }
+    td { border-bottom-color: #eee; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="toolbar">
+    <button onclick="window.print()">Print / Save PDF</button>
+    <button onclick="window.close()">Close</button>
+  </div>
+
+  <h1>◎ Anteumbra Manual Scan Report</h1>
+  <div class="meta">
+    Scan ID: {{ result.scan_id }} | Generated: {{ generated_at }} |
+    Duration: {{ "%.1f"|format(result.end_time - result.start_time) if result.end_time else 'N/A' }}s
+  </div>
+
+  <h2>Scan Summary</h2>
+  <div class="summary">
+    <div class="summary-item">
+      <div class="val">{{ result.total_files }}</div>
+      <div class="lbl">Total Files</div>
+    </div>
+    <div class="summary-item">
+      <div class="val" style="color: #ff4444;">{{ result.new_findings }}</div>
+      <div class="lbl">New Findings</div>
+    </div>
+    <div class="summary-item">
+      <div class="val" style="color: #ffaa00;">{{ result.known_findings }}</div>
+      <div class="lbl">Known (in Registry)</div>
+    </div>
+    <div class="summary-item">
+      <div class="val">{{ result.clean }}</div>
+      <div class="lbl">Clean Files</div>
+    </div>
+    <div class="summary-item">
+      <div class="val">{{ result.errors }}</div>
+      <div class="lbl">Errors</div>
+    </div>
+    <div class="summary-item">
+      <div class="val">{{ result.target_dir }}</div>
+      <div class="lbl">Target Directory</div>
+    </div>
+    <div class="summary-item">
+      <div class="val">{{ result.scanned_files }}</div>
+      <div class="lbl">Files Scanned</div>
+    </div>
+    <div class="summary-item">
+      <div class="val">{{ result.status.upper() }}</div>
+      <div class="lbl">Status</div>
+    </div>
+  </div>
+
+  {% set new_findings = result.findings|selectattr('classification', 'equalto', 'new')|list %}
+  {% if new_findings %}
+  <h2>New Detections ({{ new_findings|length }})</h2>
+  <table>
+    <thead>
+      <tr><th>File</th><th>Path</th><th>Engine</th><th>Features</th><th>Score</th></tr>
+    </thead>
+    <tbody>
+      {% for f in new_findings %}
+      <tr>
+        <td><code>{{ f.file_name }}</code></td>
+        <td style="color:#888;font-size:10px;max-width:300px;overflow:hidden;text-overflow:ellipsis;">{{ f.file_path }}</td>
+        <td>{{ f.engine }}</td>
+        <td>{{ f.features|join(', ') }}</td>
+        <td>{{ "%.2f"|format(f.score) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% set known_findings = result.findings|selectattr('classification', 'equalto', 'known')|list %}
+  {% if known_findings %}
+  <h2>Known Detections ({{ known_findings|length }})</h2>
+  <table>
+    <thead>
+      <tr><th>File</th><th>Path</th><th>Engine</th><th>First Detected</th><th>Source</th></tr>
+    </thead>
+    <tbody>
+      {% for f in known_findings %}
+      <tr>
+        <td><code>{{ f.file_name }}</code></td>
+        <td style="color:#888;font-size:10px;max-width:300px;overflow:hidden;text-overflow:ellipsis;">{{ f.file_path }}</td>
+        <td>{{ f.engine }}</td>
+        <td>{{ f.detected_at }}</td>
+        <td><span class="badge badge-known">{{ f.detection_source }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if result.status == 'error' %}
+  <div style="color:#ff4444;margin-top:20px;">Error: {{ result.error_message }}</div>
+  {% endif %}
+
+  <div style="margin-top: 40px; padding-top: 16px; border-top: 1px solid #1a1a1a; color: #555; font-size: 10px;">
+    Anteumbra v1.9.0 — Manual Scanner Report — {{ generated_at }}
+  </div>
+</div>
+</body>
+</html>

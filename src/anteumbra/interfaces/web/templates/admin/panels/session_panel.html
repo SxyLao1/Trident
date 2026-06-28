@@ -1,0 +1,128 @@
+<!-- Session管理面板 -->
+<div class="session-panel">
+  {% if message %}
+  <div class="operation-message {{ message_type }}">
+    <span class="message-icon">{% if message_type == 'success' %}✓{% else %}✗{% endif %}</span>
+    {{ message }}
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div class="operation-message error">
+    <span class="message-icon">✗</span>
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <!-- Session列表 -->
+  <div class="session-list-box">
+    {% if sessions %}
+      {% for sess in sessions %}
+      <div class="session-row">
+        <div class="session-row-info">
+          <div class="session-row-name" title="{{ sess.name }}">{{ sess.name }}</div>
+          <div class="session-row-meta">
+            大小: {{ sess.size_kb }}KB | 最后访问: {{ sess.mtime }} | 距今: {{ sess.age_days }}天
+          </div>
+        </div>
+        <span class="state-dot {{ sess.state }}" title="{{ '活跃' if sess.state == 'active' else '非活跃' }}"></span>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state">
+        <span class="empty-icon">📋</span>
+        <p>暂无活跃Session</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- 分页控件 -->
+  {% if total_pages > 1 %}
+  <div class="pagination-bar" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #333;">
+    <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %}
+            hx-get="/admin/system/session_panel?page={{ page - 1 }}"
+            hx-target="#system-session-panel"
+            hx-swap="innerHTML">← Prev</button>
+    <span class="page-info">Page {{ page }} / {{ total_pages }} ({{ session_count }} total)</span>
+    <div class="page-jump">
+      <input type="number" class="form-input" style="width: 60px; text-align: center;" min="1" max="{{ total_pages }}" value="{{ page }}"
+             onkeydown="if(event.key==='Enter'){var p=this.value;htmx.ajax('GET','/admin/system/session_panel?page='+p,{target:'#system-session-panel',swap:'innerHTML'})}">
+    </div>
+    <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %}
+            hx-get="/admin/system/session_panel?page={{ page + 1 }}"
+            hx-target="#system-session-panel"
+            hx-swap="innerHTML">Next →</button>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+(function(){
+  var stats = document.getElementById('session-header-stats');
+  if (stats) {
+    stats.innerHTML = '<span style="color:#00ff41">{{ session_count }}</span> total / <span style="color:#00ff41">{{ active_count }}</span> active';
+  }
+})();
+</script>
+
+<style>
+.session-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.session-list-box {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 4px;
+}
+.session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 5px;
+  padding: 8px 12px;
+  transition: border-color 0.2s;
+}
+.session-row:hover {
+  border-color: #00ff41;
+}
+.session-row-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.session-row-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #00ff41;
+  word-break: break-all;
+  margin-bottom: 2px;
+}
+.session-row-meta {
+  font-size: 10px;
+  color: #888;
+}
+.state-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: 10px;
+}
+.state-dot.active {
+  background: #00ff41;
+  box-shadow: 0 0 4px rgba(0, 255, 65, 0.5);
+}
+.state-dot.inactive {
+  background: #ffaa00;
+}
+}
+</style>

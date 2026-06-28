@@ -1,0 +1,14 @@
+<!-- 通用指标卡片组件 -->
+<div class="metric-card {% if state %}{{ state }}{% endif %}">
+    <div class="metric-label">{{ label }}</div>
+    <div class="metric-value" style="{% if state == 'inactive' %}color: #ffaa00;{% elif state == 'active' %}color: #00ff00;{% endif %}">
+        {% if value is number %}
+            {{ value }}
+        {% else %}
+            {{ value }}
+        {% endif %}
+    </div>
+    {% if subtitle %}
+    <small class="metric-subtitle">{{ subtitle }}</small>
+    {% endif %}
+</div>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#00661a;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#00ff41;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background square -->
+  <rect x="0" y="0" width="120" height="120" rx="4" fill="#0a0a0a" stroke="#1a1a1a" stroke-width="1"/>
+
+  <!-- Primary triangle — sharp, upward, minimalist -->
+  <polygon points="60,22 18,98 102,98" fill="none" stroke="url(#g)" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- Inner accent line — offset by 10px -->
+  <polygon points="60,32 28,92 92,92" fill="none" stroke="#00ff41" stroke-width="0.8" opacity="0.3"/>
+
+  <!-- Detection dot — centered, subtle glow -->
+  <circle cx="60" cy="65" r="3" fill="#00ff41" opacity="0.9"/>
+  <circle cx="60" cy="65" r="7" fill="#00ff41" opacity="0.1"/>
+</svg>

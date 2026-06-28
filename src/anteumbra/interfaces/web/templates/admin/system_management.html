@@ -1,0 +1,103 @@
+<div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 100%;">
+  <!-- Registry Panel -->
+  <div class="card" style="min-height: 280px; display: flex; flex-direction: column;">
+    <div class="card-header">
+      <span><span class="card-header-icon">◈</span> Registry</span>
+      <div style="display: flex; gap: 6px;">
+        <button class="btn btn-danger btn-sm"
+                hx-post="/admin/system/registry/compact"
+                hx-confirm="Compact Registry?"
+                hx-target="#system-registry-panel"
+                hx-swap="innerHTML">Compact</button>
+        <button class="btn btn-ghost btn-sm"
+                hx-get="/admin/system/registry_panel"
+                hx-target="#system-registry-panel"
+                hx-swap="innerHTML">Refresh</button>
+      </div>
+    </div>
+    <div class="card-body" id="system-registry-panel"
+         hx-get="/admin/system/registry_panel"
+         hx-trigger="load"
+         hx-swap="innerHTML"
+         style="flex: 1; overflow-y: auto; padding: 12px;">
+      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+    </div>
+  </div>
+
+  <!-- WAL Panel -->
+  <div class="card" style="min-height: 280px; display: flex; flex-direction: column;">
+    <div class="card-header">
+      <span><span class="card-header-icon">▤</span> WAL</span>
+      <div style="display: flex; gap: 6px;">
+        <button class="btn btn-danger btn-sm"
+                hx-post="/admin/system/wal/replay"
+                hx-confirm="Replay WAL?"
+                hx-target="#system-wal-panel"
+                hx-swap="innerHTML">Replay</button>
+        <button class="btn btn-ghost btn-sm"
+                hx-get="/admin/system/wal_panel"
+                hx-target="#system-wal-panel"
+                hx-swap="innerHTML">Refresh</button>
+      </div>
+    </div>
+    <div class="card-body" id="system-wal-panel"
+         hx-get="/admin/system/wal_panel"
+         hx-trigger="load"
+         hx-swap="innerHTML"
+         style="flex: 1; overflow-y: auto; padding: 12px;">
+      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+    </div>
+  </div>
+
+  <!-- Session Panel -->
+  <div class="card" style="min-height: 280px; display: flex; flex-direction: column;">
+    <div class="card-header">
+      <span><span class="card-header-icon">◉</span> Sessions</span>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <span id="session-header-stats" style="font-size: 12px; color: #888; font-family: var(--font-mono); margin-right: 4px;">
+          <!-- 由 panel 内联 JS 填充 -->
+        </span>
+        <button class="btn btn-danger btn-sm"
+                hx-post="/admin/system/session/cleanup"
+                hx-confirm="Cleanup expired sessions?"
+                hx-target="#system-session-panel"
+                hx-swap="innerHTML">Cleanup</button>
+        <button class="btn btn-ghost btn-sm"
+                hx-get="/admin/system/session_panel"
+                hx-target="#system-session-panel"
+                hx-swap="innerHTML">Refresh</button>
+      </div>
+    </div>
+    <div class="card-body" id="system-session-panel"
+         hx-get="/admin/system/session_panel"
+         hx-trigger="load"
+         hx-swap="innerHTML"
+         style="flex: 1; overflow-y: auto; padding: 12px;">
+      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+    </div>
+  </div>
+
+  <!-- Config Panel -->
+  <div class="card" style="min-height: 280px; display: flex; flex-direction: column;">
+    <div class="card-header">
+      <span><span class="card-header-icon">⚙</span> Config</span>
+      <div style="display: flex; gap: 6px;">
+        <button class="btn btn-primary btn-sm"
+                hx-post="/admin/system/config/reload"
+                hx-target="#system-config-panel"
+                hx-swap="innerHTML">Reload</button>
+        <button class="btn btn-ghost btn-sm"
+                hx-get="/admin/system/config_panel"
+                hx-target="#system-config-panel"
+                hx-swap="innerHTML">Refresh</button>
+      </div>
+    </div>
+    <div class="card-body" id="system-config-panel"
+         hx-get="/admin/system/config_panel"
+         hx-trigger="load"
+         hx-swap="innerHTML"
+         style="flex: 1; overflow-y: auto; padding: 12px;">
+      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+    </div>
+  </div>
+</div>

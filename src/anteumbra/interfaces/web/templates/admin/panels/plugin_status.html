@@ -1,0 +1,32 @@
+<!-- v1.9.5: Plugin System Status Panel -->
+<div style="display:flex;flex-direction:column;gap:8px;">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ '#00ff41' if enabled else '#ff4444' }};"></span>
+    <span style="color:#888;font-size:11px;">System: <strong style="color:{{ '#00ff41' if enabled else '#ff4444' }};">{{ 'ENABLED' if enabled else 'DISABLED' }}</strong></span>
+    <span style="color:#555;font-size:10px;">Detectors: <strong style="color:#00ff41;">{{ detector_count }}</strong></span>
+    <span style="color:#555;font-size:10px;">Notifiers: <strong style="color:#00ff41;">{{ notifier_count }}</strong></span>
+    <span style="color:#555;font-size:10px;">Sources: <strong style="color:#00ff41;">{{ source_count }}</strong></span>
+  </div>
+  {% if plugins %}
+  <div style="display:flex;flex-direction:column;gap:3px;">
+    {% for p in plugins %}
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 8px;background:#0a0a0a;border-radius:3px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="color:#00ff41;font-size:10px;">&#9679;</span>
+        <span style="color:#ccc;font-size:10px;">{{ p.name }}</span>
+        <span class="badge badge-blue" style="font-size:8px;">{{ p.type }}</span>
+      </div>
+      <span style="color:#555;font-size:9px;">v{{ p.version }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p style="color:#555;font-size:11px;text-align:center;padding:8px;">
+    {% if enabled %}
+    No plugins loaded. Add to <code>[plugins] builtin</code> in config.toml.
+    {% else %}
+    Enable in config.toml: <code>[plugins] enabled = true</code>
+    {% endif %}
+  </p>
+  {% endif %}
+</div>

@@ -1,0 +1,67 @@
+<div id="metrics-panel"
+     hx-get="/admin/metrics/data"
+     hx-trigger="load delay:500ms, sse:registry_update"
+     hx-target="#metrics-panel"
+     hx-swap="innerHTML">
+
+    <!-- 静态指标网格 -->
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-label">扫描总计</div>
+            <div class="metric-value">{{ metrics.scan_total|default(0) }}</div>
+        </div>
+
+        <!-- 高危文件动态颜色（内联计算，避免CSS类问题） -->
+        <div class="metric-card">
+            <div class="metric-label">高危文件</div>
+            <!-- v1.7.6-Patch3: 动态计算颜色类 -->
+            {% set suspicious_count = metrics.scan_suspicious|default(0) %}
+            {% set warning_threshold = warning_threshold|default(1) %}
+            {% set critical_threshold = critical_threshold|default(3) %}
+
+            {% if suspicious_count == 0 %}
+                {% set color_class = 'safe' %}
+                {% set color_code = '#00ff00' %}
+            {% elif suspicious_count < critical_threshold %}
+                {% set color_class = 'warning' %}
+                {% set color_code = '#ffaa00' %}
+            {% else %}
+                {% set color_class = 'critical' %}
+                {% set color_code = '#ff4444' %}
+            {% endif %}
+
+            <div class="metric-value {{ color_class }}"
+                 id="scan-suspicious"
+                 hx-get="/admin/metrics/scan_suspicious"
+                 hx-trigger="sse:registry_update from:body"
+                 hx-target="#scan-suspicious"
+                 hx-swap="innerHTML"
+                 style="color: {{ color_code }}; transition: color 0.3s ease-in-out;">
+                {{ suspicious_count }}
+            </div>
+        </div>
+
+        <!-- 内存和运行时间 -->
+        <div class="metric-card">
+            <div class="metric-label">内存使用</div>
+            <div class="metric-value">{{ "%.1f"|format(metrics.memory_mb|default(0)) }} MB</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">运行时间</div>
+            <div class="metric-value">{{ "%.1f"|format((metrics.uptime_seconds|default(0)) / 3600) }} 小时</div>
+        </div>
+    </div>
+
+    <!-- 性能队列指标（必须保留） -->
+    {% if metrics.registry_qsize > 0 %}
+    <div style="margin-top: 15px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ffaa00;">
+        <small style="color: #ffaa00;">⚠️ Registry 队列积压: {{ metrics.registry_qsize }} 条待保存</small>
+    </div>
+    {% endif %}
+
+    {% if metrics.alert_qsize > 10 %}
+    <div style="margin-top: 10px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ff4444;">
+        <small style="color: #ff4444;">🚨 告警队列阻塞: {{ metrics.alert_qsize }} 条待发送</small>
+    </div>
+    {% endif %}
+</div>

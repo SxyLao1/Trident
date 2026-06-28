@@ -1,0 +1,302 @@
+# -*- coding: utf-8 -*-
+"""
+v1.9.0: 主动手动扫描引擎
+
+遍历用户配置的 Web 目录，使用现有 YARA/Static 扫描器逐文件扫描。
+与 Registry 交叉比对去重，区分为"新发现"（首次检出）和"已知"（曾被动检测）。
+
+架构：
+  ManualScanner.scan_directory()
+    → 遍历目录文件
+    → quick_scan_yara() 现有扫描链
+    → Registry path_to_key() 去重
+    → 新发现自动 add(detection_source="active")
+    → progress_callback 进度回调 → 供 SSE 推送
+"""
+import hashlib
+import logging
+import time
+import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable, Dict, List, Optional, Set
+
+from anteumbra.infrastructure.detection.scanner import quick_scan_yara
+from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
+
+logger = logging.getLogger("monitor.manual_scanner")
+
+
+@dataclass
+class ManualScanResult:
+    """单次手动扫描的完整结果"""
+    scan_id: str
+    target_dir: str
+    start_time: float
+    end_time: float = 0.0
+    status: str = "pending"        # pending | running | completed | cancelled | error
+    total_files: int = 0
+    scanned_files: int = 0
+    new_findings: int = 0           # 命中规则 且 不在 Registry
+    known_findings: int = 0         # 命中规则 且 已在 Registry
+    clean: int = 0
+    errors: int = 0
+    findings: List[Dict] = field(default_factory=list)
+    error_message: str = ""
+
+
+class ManualScanner:
+    """主动扫描器 — 遍历目录，对每个文件运行扫描链，与 Registry 去重"""
+
+    def __init__(self, app_logger=None):
+        self.logger = app_logger or logger
+        self._known_paths: Set[str] = set()
+        self._registry_records: Dict[str, Dict] = {}
+
+    def _build_known_index(self):
+        """预加载 Registry 全部记录到内存索引，O(1) 去重查找"""
+        try:
+            from anteumbra.infrastructure.suspicious_registry import get_all
+        except ImportError:
+            self.logger.warning("[MANUAL_SCANNER] 无法导入 suspicious_registry，去重功能不可用")
+            return
+
+        records = get_all(include_deleted=True)
+        self._known_paths.clear()
+        self._registry_records.clear()
+        for r in records:
+            key = r.get("file_path", "").lower()
+            if key:
+                self._known_paths.add(key)
+                self._registry_records[key] = r
+        self.logger.info(f"[MANUAL_SCANNER] 已知索引: {len(self._known_paths)} 条记录")
+
+    def scan_directory(
+        self,
+        target_dir: Path,
+        recursive: bool = True,
+        extensions: Optional[List[str]] = None,
+        progress_callback: Optional[Callable[["ManualScanResult"], None]] = None,
+        cancelled_check: Optional[Callable[[], bool]] = None,
+    ) -> ManualScanResult:
+        """
+        遍历目录扫描所有文件。
+
+        Args:
+            target_dir: 要扫描的目标目录
+            recursive: 是否递归子目录
+            extensions: 限定的文件扩展名列表（None 则默认 monitor_extensions）
+            progress_callback: 进度回调，每 N 个文件调用一次
+            cancelled_check: 取消检查回调，返回 True 时中断扫描
+
+        Returns:
+            ManualScanResult 包含完整统计和发现列表
+        """
+        scan_id = hashlib.sha256(
+            f"{target_dir}:{time.time()}:{uuid.uuid4().hex[:8]}".encode()
+        ).hexdigest()[:16]
+
+        result = ManualScanResult(
+            scan_id=scan_id,
+            target_dir=str(target_dir),
+            start_time=time.time(),
+            status="running",
+        )
+
+        # ── 规范化目录 ──
+        try:
+            target = normalize_path(target_dir)
+        except Exception:
+            target = Path(str(target_dir))
+        if not target.exists():
+            result.status = "error"
+            result.error_message = f"目录不存在: {target_dir}"
+            return result
+        if not target.is_dir():
+            result.status = "error"
+            result.error_message = f"路径不是目录: {target_dir}"
+            return result
+
+        # ── 默认扩展名 ──
+        if extensions is None:
+            try:
+                from anteumbra.infrastructure.config.registry import ConfigRegistry
+                cfg = ConfigRegistry.get_raw_config()
+                extensions = cfg.get("paths", {}).get(
+                    "monitor_extensions", [".php", ".asp", ".aspx", ".jsp", ".jspx"]
+                )
+            except Exception:
+                extensions = [".php", ".asp", ".aspx", ".jsp", ".jspx"]
+
+        # ── 排除目录 ──
+        exclude_dirs: Set[str] = set()
+        try:
+            from anteumbra.infrastructure.config.registry import ConfigRegistry
+            cfg = ConfigRegistry.get_raw_config()
+            scan_opts = cfg.get("website", {}).get("scan_options", {})
+            exclude_dirs = set(scan_opts.get("exclude_dirs", ["cache", "logs", "temp", "data", ".git"]))
+        except Exception:
+            exclude_dirs = {"cache", "logs", "temp", "data", ".git"}
+
+        # ── 构建已知索引 ──
+        self._build_known_index()
+
+        # ── 收集文件列表 ──
+        ext_set = {e.lower() for e in extensions}
+        file_list: List[Path] = []
+
+        if recursive:
+            for root, dirs, files in target.walk():
+                # 过滤排除目录
+                dirs[:] = [d for d in dirs if d not in exclude_dirs and not d.startswith(".")]
+                for f in files:
+                    fp = root / f
+                    if fp.suffix.lower() in ext_set:
+                        file_list.append(fp)
+        else:
+            for f in target.iterdir():
+                if f.is_file() and f.suffix.lower() in ext_set:
+                    file_list.append(f)
+
+        result.total_files = len(file_list)
+        self.logger.info(
+            f"[MANUAL_SCANNER] 扫描开始: {target_dir} | {result.total_files} 文件 | "
+            f"扩展名: {extensions} | 递归: {recursive}"
+        )
+
+        # ── 逐文件扫描 ──
+        progress_interval = max(1, result.total_files // 50)  # 每 2% 回调一次
+        scan_options = None
+        try:
+            from anteumbra.infrastructure.config.registry import ConfigRegistry
+            from anteumbra.infrastructure.models import ScanOptions
+            cfg = ConfigRegistry.get_raw_config()
+            so = cfg.get("website", {}).get("scan_options", {})
+            scan_options = ScanOptions(**so) if so else ScanOptions()
+        except Exception:
+            from anteumbra.infrastructure.models import ScanOptions
+            scan_options = ScanOptions()
+
+        for idx, file_path in enumerate(file_list):
+            # 检查取消
+            if cancelled_check and cancelled_check():
+                result.status = "cancelled"
+                result.end_time = time.time()
+                self.logger.info(f"[MANUAL_SCANNER] 扫描已取消: {result.scanned_files}/{result.total_files}")
+                return result
+
+            result.scanned_files = idx + 1
+
+            try:
+                # ── 去重检查 ──
+                norm_key = path_to_key(file_path).lower()
+                is_known = norm_key in self._known_paths
+
+                # ── 扫描 ──
+                scan_result = quick_scan_yara(file_path, scan_options, self.logger)
+
+                if scan_result and scan_result.is_suspicious:
+                    scan_result.detection_source = "active"
+
+                    if is_known:
+                        # 已在 Registry → 已知发现
+                        result.known_findings += 1
+                        existing = self._registry_records.get(norm_key, {})
+                        result.findings.append({
+                            "file_path": str(file_path),
+                            "file_name": file_path.name,
+                            "classification": "known",
+                            "engine": scan_result.engine,
+                            "features": scan_result.features,
+                            "score": scan_result.score,
+                            "detected_at": existing.get("detected_at", "N/A"),
+                            "quarantine_id": existing.get("quarantine_id", ""),
+                            "detection_source": existing.get("detection_source", "passive"),
+                        })
+                    else:
+                        # 不在 Registry → 新发现！自动注册
+                        result.new_findings += 1
+                        try:
+                            from anteumbra.infrastructure.suspicious_registry import add
+                            add(file_path, scan_result.features,
+                                first_seen_ip="127.0.0.1",
+                                detection_source="active")
+                            # 立即更新索引，避免同次扫描重复记录
+                            self._known_paths.add(norm_key)
+                            self._registry_records[norm_key] = {
+                                "file_path": norm_key,
+                                "detected_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                "features": scan_result.features,
+                                "quarantine_id": "",
+                                "detection_source": "active",
+                            }
+                        except Exception as add_err:
+                            self.logger.warning(
+                                f"[MANUAL_SCANNER] 注册失败: {file_path} | {add_err}")
+                            result.errors += 1
+
+                        result.findings.append({
+                            "file_path": str(file_path),
+                            "file_name": file_path.name,
+                            "classification": "new",
+                            "engine": scan_result.engine,
+                            "features": scan_result.features,
+                            "score": scan_result.score,
+                            "detected_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                            "quarantine_id": "",
+                            "detection_source": "active",
+                        })
+
+                    self.logger.debug(
+                        f"[MANUAL_SCANNER] {'KNOWN' if is_known else 'NEW'}: "
+                        f"{file_path.name} | {scan_result.engine}"
+                    )
+
+                else:
+                    # 未命中规则 → clean
+                    result.clean += 1
+
+            except Exception as file_error:
+                result.errors += 1
+                self.logger.warning(f"[MANUAL_SCANNER] 扫描错误: {file_path} | {file_error}")
+
+            # ── 进度回调 ──
+            if progress_callback and idx % progress_interval == 0:
+                try:
+                    progress_callback(result)
+                except Exception:
+                    pass
+
+        # ── 完成 ──
+        result.status = "completed"
+        result.end_time = time.time()
+        elapsed = round(result.end_time - result.start_time, 1)
+        self.logger.info(
+            f"[MANUAL_SCANNER] 扫描完成: {result.scanned_files}/{result.total_files} | "
+            f"新发现:{result.new_findings} 已知:{result.known_findings} "
+            f"clean:{result.clean} 错误:{result.errors} | 耗时:{elapsed}s"
+        )
+
+        # 最后一次回调
+        if progress_callback:
+            try:
+                progress_callback(result)
+            except Exception:
+                pass
+
+        return result
+
+
+# ── 便捷函数 ──
+
+
+def quick_manual_scan(
+    target_dir: str,
+    recursive: bool = True,
+    extensions: Optional[List[str]] = None,
+) -> ManualScanResult:
+    """同步扫描快捷函数（供 CLI / 调试使用）"""
+    scanner = ManualScanner()
+    return scanner.scan_directory(
+        Path(target_dir), recursive=recursive, extensions=extensions
+    )
