@@ -1,7 +1,7 @@
 [system]
 version = "1.9.5-dev"
 release_date = "TBD"
-project_root = "\".\" # 项目根目录（辅助配置）"
+project_root = "\".\"
 
 [website]
 name = "Website-PhpStudy"
@@ -29,40 +29,40 @@ debug_mode = false
 
 [web_admin]
 enabled = true
-host = "\"127.0.0.1\"  # 生产环境建议绑定内网IP"
+host = "\"127.0.0.1\"
 port = 8080
 username = "admin"
 password_hash = "scrypt:32768:8:1$nJZif7Fjw1D7xuoR$b83dacf637039342acaa49152fa8736fd9a4ef18d0ff5e24233cc62bfc76bde458698d5368d7070dfc6a1eb9f9d5f0fede8da4241c0918d8bfd053246b70d2d6"
-allowed_ips = "[\"127.0.0.1\"]  # v1.7.1新增：IP白名单"
-sse_log_levels = "[\"INFO\", \"ERROR\", \"CRITICAL\"]  # 前端显示允许的日志级别"
-items_per_page = "6  # 可疑清单每页条数"
-yara_items_per_page = "10  # YARA规则每页条数"
-session_items_per_page = "20  # Session列表每页条数"
-config_items_per_page = "10   # 配置历史每页条数"
-session_type = "\"filesystem\"  # 存储类型：filesystem/redis"
-session_dir = "\"data/sessions\"  # 会话文件存储路径"
-session_lifetime = "3600        # Session有效期（秒）"
-session_permanent = "false      # 关闭浏览器自动过期"
-sse_max_clients_per_ip = "5          # 单个IP最大连接数（默认5）"
-sse_max_total_clients = "20          # 全局最大连接数（默认20）"
+allowed_ips = "[\"127.0.0.1\"]
+sse_log_levels = "[\"INFO\", \"ERROR\", \"CRITICAL\"]
+items_per_page = "6
+yara_items_per_page = "10
+session_items_per_page = "20
+config_items_per_page = "10
+session_type = "\"filesystem\"
+session_dir = "\"data/sessions\"
+session_lifetime = "3600
+session_permanent = "false
+sse_max_clients_per_ip = "5
+sse_max_total_clients = "20
 
 [waf_source]
 enabled = true
-type = "\"mock\"    # mock | chaitin | aliyun"
+type = "\"mock\"
 url = "http://127.0.0.1:8081/api/events"
-poll_interval = "10  # 轮询间隔（秒）"
-dest_ips = "[]  # 例如: [\"203.0.113.5\", \"10.0.1.100\"]"
+poll_interval = "10
+dest_ips = "[]
 
 [management]
-ips = "[\"127.0.0.1\", \"::1\"]  # 本机回环地址，可追加内网管理段如 \"192.168.1.0/24\""
+ips = "[\"127.0.0.1\", \"::1\"]
 
 [profiling]
-time_window_hours = "4  # 1=精细 4=默认 24=粗粒度 72=长期追踪"
+time_window_hours = "4
 
 [ip_blocker]
 enabled = true
 auto_block_enabled = false
-auto_block_min_score = "0.8   # 触发自动封禁的最低风险分 (0.0-1.0)"
+auto_block_min_score = "0.8
 devices = [
     { name = "Stdout Logger", type = "stdout" },
 ]
@@ -71,13 +71,13 @@ devices = [
 auto_quarantine_enabled = false
 
 [security]
-csrf_enabled = "true  # v1.7.1新增：CSRF开关"
-csrf_exclude_paths = "[\"/api/v1/health\"]  # 排除健康检查"
+csrf_enabled = "true
+csrf_exclude_paths = "[\"/api/v1/health\"]
 secret_key = "change_this_to_a_random_32_char_string_in_production"
 
 [registry]
 async_save_enabled = true
-async_save_interval_seconds = "60  # 暂时硬编码，未调用，每60秒批量保存一次"
+async_save_interval_seconds = "60
 
 [registry.audit]
 retention_days = 30
@@ -91,7 +91,7 @@ dir_cache_ttl = 60
 dir_cache_timeout_seconds = 60
 
 [logging]
-level = "\"INFO\"  # 控制Python logger过滤级别"
+level = "\"INFO\"
 encoding = "utf-8"
 
 [logging.symbols]
@@ -206,8 +206,8 @@ cooldown_gamma = 1.2
 cooldown_delta = 1.3
 
 [thresholds.visual_alert]
-warning_threshold = "1  # 1个就警告"
-critical_threshold = "3  # 3个就严重"
+warning_threshold = "1
+critical_threshold = "3
 
 [filesizes]
 wal_rotate_threshold_mb = 10
@@ -246,7 +246,7 @@ health_check_port = 8080
 health_check_host = "127.0.0.1"
 
 [notifier]
-enabled = "true  # CI 环境关闭，本地运行时设为 true"
+enabled = "true
 
 [notifier.wechat]
 enabled = true
@@ -274,11 +274,11 @@ timeout = 30
 enabled = false
 
 [storage]
-backend = "\"both\"   # 双写模式: JSON兜底 + SQLite优先读"
+backend = "\"both\"
 db_path = "data/trident.db"
 
 [plugins]
-enabled = "true    # v1.9.5: 启用插件系统"
+enabled = "true
 builtin = "["
 
 [plugins.stdout_logger]
