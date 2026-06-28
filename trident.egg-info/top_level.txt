@@ -1,5 +1,0 @@
-config
-core
-plugins
-utils
-web

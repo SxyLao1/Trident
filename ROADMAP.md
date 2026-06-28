@@ -1,8 +1,11 @@
 # Roadmap
 
-> **Current Version**: v1.9.5-dev (2026-06-28)  
-> **Next Milestone**: v1.10.0 (Multi-Site) / v2.0 (Architecture)  
-> **Vision**: Lightweight Web Perimeter Security — Passive Detection + Semi-Active Response
+> ⚠️ **ARCHIVED** — Trident has been renamed to **Anteumbra v2.0**.  
+> See [SxyLao1/Anteumbra](https://github.com/SxyLao1/Anteumbra) for the latest version.  
+> This repository is kept for historical reference and will not receive new features.  
+>
+> **Trident Final Version**: v1.9.5-stable (2026-06-28)  
+> **Anteumbra Current Version**: v2.0.0.dev0
 
 ---
 
