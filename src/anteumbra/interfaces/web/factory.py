@@ -122,10 +122,10 @@ def create_app() -> Flask:
     def protect_sensitive_static():
         if request.path.startswith('/static/js/'):
             if not session.get('authenticated'):
-                # 仅允许 login 页所需的 JS
-                allowed = ['/static/js/utils.js']
+                # Login page needs utils.js + sse-manager.js for CSRF
+                allowed = ['/static/js/utils.js', '/static/js/sse-manager.js']
                 if request.path not in allowed:
-                    return ('Not Found', 404, {})  # 直接返回404，不通过 abort
+                    return ('Not Found', 404, {})
 
     # 注册Blueprint
     from anteumbra.interfaces.web.blueprints import register_blueprints

@@ -122,6 +122,7 @@
   min-width: 0;
   background: rgba(0, 0, 0, 0.3);
   border-color: rgba(0, 255, 65, 0.2);
+  color: #e0e0e0;
   font-size: 14px;
   padding: 12px 16px;
 }
