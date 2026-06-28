@@ -1,7 +1,7 @@
 # Roadmap
 
-> **Current Version**: v1.8.4-stable (2026-06-27)  
-> **Next Milestone**: v1.9.0  
+> **Current Version**: v1.9.5-dev (2026-06-28)  
+> **Next Milestone**: v1.10.0 (Multi-Site) / v2.0 (Architecture)  
 > **Vision**: Lightweight Web Perimeter Security — Passive Detection + Semi-Active Response
 
 ---
@@ -44,26 +44,55 @@ Major additions since v1.8.0:
 
 ---
 
-## v1.9.x — SQLite + Multi-Site + WAF Adapters (2026-Q3)
+## v1.9.x — Architecture Refactoring + Plugin Ecosystem ✅ (Mostly Complete, 2026-06-28)
 
-**Priority items**:
-1. **SQLite persistence** — replace JSON for performance
-2. **Multi-site support** — [[website]] array
-3. **WAF standard adapters** — ModSecurity/Cloudflare/AWS/Syslog
-4. **gunicorn deployment** — multi-worker
-5. **SIEM export** (CEF/Syslog)
-6. **Core module tests** — 80%+ coverage + CI/CD
-7. **Memory shell plugin** — Java reflection PoC
-8. **Log heuristic engine** — behavior-level detection
+### v1.9.0 — Blueprint Split + Interface Layer ✅
+| Feature | Status |
+|---------|--------|
+| Blueprint split (admin_bp.py 3767→2155, 4 new BPs) | ✅ |
+| JS modularization (dashboard.js 1455→561, 4 page modules) | ✅ |
+| core/interfaces/ — 5 ABCs (Plugin, Detector, Repository, Notifier, EventSource) | ✅ |
+| core/repositories/ — JsonRepository + DualWriteRepository | ✅ |
+| web/blueprints/_shared.py — common helpers | ✅ |
 
-- Multi-site monitoring: `[[website]]` array in `config.toml`, single Dashboard for all sites
-- Site isolation: independent registry/WAL per site or shared central WAL
-- Centralized alerting: one webhook with `site_id` tag
-- Geo-IP: MaxMind GeoLite2 integration
-- Threat intelligence: MISP / AbuseIPDB integration
-- Admin panel hardening: 2FA (TOTP), login rate limiting, brute-force detection
-- API key management: scoped keys for external systems
-- SQLite default backend
+### v1.9.1–v1.9.2 — Storage + Performance ✅
+| Feature | Status |
+|---------|--------|
+| SQLite backend (WAL mode, 5 tables, auto-migration) | ✅ |
+| DualWriteRepository (JSON safety net + SQLite read priority) | ✅ |
+| config.toml: `[storage] backend = "json" | "sqlite" | "both"` | ✅ |
+
+### v1.9.3–v1.9.4 — Plugin Ecosystem ✅
+| Feature | Status |
+|---------|--------|
+| Plugin Manager (singleton, lifecycle, event dispatch) | ✅ |
+| stdout_logger plugin (colored terminal alerts) | ✅ |
+| WAF adapters: ModSecurity, Cloudflare, AWS WAF, Syslog | ✅ |
+| config.toml: `[plugins] enabled = true` | ✅ |
+
+### v1.9.5 — Detection Pipeline + SIEM + Tests ✅
+| Feature | Status |
+|---------|--------|
+| Log Heuristic Engine (5 behavioral detectors) | ✅ |
+| SIEM CEF/JSON Lines exporter (file + syslog UDP) | ✅ |
+| Memory Shell Tracer (access log → WebShell file correlation) | ✅ |
+| Memory Shell reference tools (JSP/ASPX, upstream attribution) | ✅ |
+| Gunicorn production config (multi-worker, 2-4x CPU) | ✅ |
+| Core test suite (63 tests, 6 modules) | ✅ |
+| pyproject.toml + pip install -e . dev setup | ✅ |
+| Settings frontend: SIEM Export, Storage, Plugin status panels | ✅ |
+| README ecosystem section (7 upstream projects credited) | ✅ |
+
+### Pending (v1.10.0 / v2.0)
+
+| Priority | Feature | Notes |
+|----------|---------|-------|
+| P0 | Multi-site support | `[[website]]` array, per-site isolation |
+| P1 | Java Memory Shell Agent PoC | Custom Java agent for reflection detection |
+| P1 | Geo-IP integration | MaxMind GeoLite2 |
+| P2 | Admin 2FA | TOTP, login rate limiting |
+| P2 | API key management | Scoped keys for external systems |
+| P3 | Threat intelligence | MISP / AbuseIPDB integration |
 
 ---
 

@@ -15,8 +15,8 @@
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/version-1.8.4-blue?style=flat-square" alt="Version">
-  <img src="https://img.shields.io/badge/status-stable-success?style=flat-square" alt="Status">
+  <img src="https://img.shields.io/badge/version-1.9.5-blue?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/status-dev--stable-success?style=flat-square" alt="Status">
   <img src="https://img.shields.io/badge/python-3.8%2B-green?style=flat-square&logo=python" alt="Python">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -37,12 +37,18 @@ Key capabilities:
 - **YARA rule engine** — 18+ rule files covering PHP, ASP, JSP, ASPX, Godzilla, Behinder; hot-reload supported
 - **Threat profiling** — Attacker behavior clustering via UA/time-bucket, IP pool merging, decay engine
 - **File similarity clustering** — ssdeep/TLSH/SimHash hash engine with 0.80 threshold grouping
+- **Log heuristic engine** — Behavior-level detection: brute force, scanner, error storm, tool signature, suspicious path
+- **Memory shell detection** — Java/ASP.NET reference tools + access log tracer for WebShell origin correlation
 - **Batch operations** — Cross-page multi-select for Records/Quarantine with batch quarantine/restore/delete
+- **SIEM export** — CEF/JSON Lines/Syslog formats with file rotation and real-time UDP streaming
+- **Plugin system** — Config-driven plugin manager with lifecycle, event dispatch, 4 WAF adapters (ModSecurity/Cloudflare/AWS/Syslog)
+- **Dual storage** — JSON + SQLite (WAL mode) with configurable backend switching and auto-migration
 - **WAL transaction logs** — Async batch writes with auto rotation, minimal data loss under file locking
 - **Smart alerting** — Exponential backoff with adaptive thresholds to reduce false positives
 - **Web dashboard** — Dark theme terminal-style interface, SSE real-time log stream, HTMX-driven, SPA navigation
 - **Enterprise security** — CSRF protection, IP whitelist, Scrypt password hashing, static JS auth guard
-- **Wildcard log tracing** — Recursive path matching like `**/access.log` with attacker IP extraction
+- **Production deployment** — Gunicorn multi-worker config, systemd service, pip install -e . dev setup
+- **Core test suite** — 63 tests across 6 modules, one-click Windows runner
 
 ## Quick Start
 
@@ -79,13 +85,19 @@ Then open `http://127.0.0.1:8080`. Default username is `admin`; password is prin
 Trident/
 ├── app.py                  # Entry point
 ├── config.toml             # Main configuration
+├── pyproject.toml          # pip install -e . dev setup
+├── gunicorn.conf.py        # Production WSGI deployment
 ├── config/                 # Config loader & registry
 ├── core/                   # Detection engine, WAL, metrics, notifier
+│   ├── interfaces/         # Plugin/Detector/Repository/Notifier ABCs
+│   ├── repositories/       # JSON + SQLite storage implementations
+│   └── similarity/         # ssdeep/TLSH/SimHash hash engine
+├── plugins/                # Plugin ecosystem (stdout_logger, WAF adapters)
 ├── web/                    # Flask blueprints, templates, static assets
 ├── rules/webshell/         # YARA rule files
-├── tools/                  # Admin utilities
+├── tools/memory-shell/     # Java/ASP.NET reference scanners
 ├── scripts/                # Installers & service templates
-└── tests/                  # Compatibility & tool validation
+└── tests/core/             # 63-test suite (pytest)
 ```
 
 ## Requirements

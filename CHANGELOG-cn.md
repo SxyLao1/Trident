@@ -5,6 +5,50 @@
 
 ---
 
+## [1.9.5] - 2026-06-28
+
+### 新增
+- **日志启发式引擎**：访问日志行为级检测，5 个检测器（暴力破解/扫描器/错误风暴/工具指纹/可疑路径）
+- **SIEM 导出器**：JSON Lines/CEF/Syslog 格式，文件自动轮转 + UDP 实时推送
+- **内存马溯源器**：通过访问日志分析，将内存马告警关联到原始 WebShell 文件
+- **内存马工具集**：Java/ASP.NET 参考扫描器，含完整上游归属说明
+- **Gunicorn 配置**：多 worker 生产部署（2-4x CPU）
+- **核心测试套件**：63 个测试覆盖 6 个模块
+- **开发基础设施**：pyproject.toml、pytest.ini、run_tests.bat
+- **Settings 前端**：SIEM 导出、存储状态、插件状态面板
+
+### 变更
+- 插件系统已启用（stdout_logger 加载中）
+- 存储后端切换为双写模式（JSON 兜底 + SQLite 优先读）
+- 版本号：v1.9.5-dev
+
+### 修复
+- File Clusters 页面模板变量 `stats` 未定义
+
+## [1.9.0–1.9.4] - 2026-06-28
+
+### 新增 — 架构重构 (v1.9.0)
+- **Blueprint 拆分**：admin_bp.py 3767→2155 行，拆出 4 个独立蓝图（scanner/blocklist/profiles/records）
+- **JS 模块化**：dashboard.js 1455→561 行，4 个页面模块
+- **接口抽象层**：core/interfaces/ — 5 个抽象基类（Plugin/Detector/Repository/Notifier/EventSource）
+- **数据仓库层**：core/repositories/ — JsonRepository + DualWriteRepository
+
+### 新增 — 存储引擎 (v1.9.2)
+- **SQLite 后端**：WAL 模式、5 表自动建表、索引优化、事务支持
+- **双写模式**：JSON 安全网 + SQLite 读优先，通过 `[storage] backend` 切换
+
+### 新增 — 插件生态 (v1.9.3–v1.9.4)
+- **插件管理器**：单例生命周期管理、事件分发、配置驱动加载
+- **stdout_logger**：终端彩色告警插件
+- **WAF 适配器**：ModSecurity/Cloudflare/AWS/Syslog 4 个适配器
+
+### 新增 — 安全功能
+- 管理员密码重置（scrypt 哈希存入 .env）
+- 静态 JS 文件鉴权守卫
+- README 生态章节（7 个上游项目引用）
+
+## [1.8.4] - 2026-06-27
+
 ## [1.8.3] - 2026-06-26
 
 ### 新增

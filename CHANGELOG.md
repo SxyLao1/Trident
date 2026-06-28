@@ -7,6 +7,46 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.9.5] - 2026-06-28
+
+### Added
+- **Log Heuristic Engine** (`core/log_heuristic.py`): behavior-level detection from access logs with 5 detectors (brute force, scanner, error storm, known tools, suspicious paths)
+- **SIEM Exporter** (`core/siem_exporter.py`): JSON Lines/CEF/Syslog export with auto-rotate file + UDP streaming
+- **Memory Shell Tracer** (`core/memory_shell_tracer.py`): traces memory shell detection back to original WebShell file via access log correlation
+- **Memory Shell Tools** (`tools/memory-shell/`): Java/ASP.NET reference scanners with upstream attribution (7 projects in README ecosystem section)
+- **Gunicorn Config** (`gunicorn.conf.py`): multi-worker production WSGI deployment (2-4x CPU)
+- **Core Test Suite**: 63 tests across 6 modules (log_heuristic, json_repo, sqlite_repo, siem_exporter, memory_shell_tracer, plugin_manager)
+- **Dev Infrastructure**: `pyproject.toml` (pip install -e .), `pytest.ini`, `run_tests.bat`
+- **Settings Frontend**: SIEM Export, Storage Status, Plugin Status panels
+
+### Changed
+- Settings page: added 3 new status cards (EXPORT & SIEM, STORAGE, PLUGINS)
+- Config: `[plugins] enabled = true`, `[storage] backend = "both"`, `[siem] enabled = true`
+- Version: config.toml → v1.9.5-dev
+
+### Fixed
+- File Clusters page: `stats` undefined in template (now computed from cluster data)
+- Test suite: IIS parser, tool detection thresholds, DualWrite schema compatibility
+
+## [1.9.0–1.9.4] - 2026-06-28
+
+### Added — Architecture (v1.9.0)
+- **Blueprint split**: admin_bp.py 3767→2155 lines, 4 independent Blueprints (scanner, blocklist, profiles, records) — 86 total endpoints
+- **JS modularization**: dashboard.js 1455→561 lines, 4 page modules in `js/modules/`
+- **Interface layer**: `core/interfaces/` — 5 ABCs (Plugin, Detector, Repository, Notifier, EventSource)
+- **Repository layer**: `core/repositories/` — JsonRepository (thread-safe atomic write) + DualWriteRepository
+- **Shared helpers**: `web/blueprints/_shared.py` — file verification, SSE token, rate limiting
+
+### Added — Storage (v1.9.2)
+- **SQLite backend** (`core/repositories/sqlite_repository.py`): WAL mode, 5 tables auto-create, indexes, transactions
+- **Dual-write mode**: JSON safety net + SQLite read priority, configurable via `[storage] backend`
+
+### Added — Plugins (v1.9.3–v1.9.4)
+- **Plugin Manager** (`core/plugin_manager.py`): singleton lifecycle manager, event dispatch, config-driven loading
+- **stdout_logger**: colored terminal alert plugin (Plugin + Notifier interface)
+- **WAF Adapters**: ModSecurity JSON audit, Cloudflare GraphQL, AWS WAF CloudWatch, Syslog CEF (4 adapters)
+- Config: `[plugins]` section with per-plugin configuration
+
 ## [1.8.4] - 2026-06-27
 
 ### Added
