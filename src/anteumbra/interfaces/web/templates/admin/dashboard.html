@@ -9,7 +9,7 @@
   <meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
   <!-- v1.7.9: HTMX全局CSRF注入 — 所有hx-post自动携带token -->
   <script>
-    document.body.addEventListener('htmx:configRequest', function(evt) {
+    document.addEventListener('htmx:configRequest', function(evt) {
       var token = document.querySelector('meta[name="csrf-token"]')?.content;
       if (token) { evt.detail.headers['X-CSRFToken'] = token; }
     });
@@ -62,7 +62,7 @@
           <span class="status-label">OFF</span>
         </div>
         <button id="logout-btn" class="btn btn-danger btn-sm">
-          <span>⏻</span> LOGOUT
+          <span>⏻</span> {{ _('Logout') }}
         </button>
       </div>
     </header>
@@ -74,45 +74,45 @@
         <div class="sidebar-header">Navigation</div>
         <ul class="nav-menu">
           <li class="nav-item">
-            <a class="nav-link active" data-path="overview" data-title="Overview">
+            <a class="nav-link active" data-path="overview" data-title="{{ _('Overview') }}">
               <span class="nav-icon">◆</span>
-              <span>Overview</span>
+              <span>{{ _('Overview') }}</span>
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" data-path="threats" data-title="Threats">
+            <a class="nav-link" data-path="threats" data-title="{{ _('Threats') }}">
               <span class="nav-icon">⚡</span>
-              <span>Threats</span>
+              <span>{{ _('Threats') }}</span>
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" data-path="yara/rules" data-title="Rules">
+            <a class="nav-link" data-path="yara/rules" data-title="{{ _('Rules') }}">
               <span class="nav-icon">⌘</span>
-              <span>Rules</span>
+              <span>{{ _('Rules') }}</span>
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" data-path="scanner" data-title="Scanner">
+            <a class="nav-link" data-path="scanner" data-title="{{ _('Scanner') }}">
               <span class="nav-icon">◎</span>
-              <span>Scanner</span>
+              <span>{{ _('Scanner') }}</span>
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" data-path="profiles" data-title="Profiles">
+            <a class="nav-link" data-path="profiles" data-title="{{ _('Profiles') }}">
               <span class="nav-icon">◉</span>
-              <span>Profiles</span>
+              <span>{{ _('Profiles') }}</span>
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" data-path="blocklist" data-title="Blocklist">
+            <a class="nav-link" data-path="blocklist" data-title="{{ _('Blocklist') }}">
               <span class="nav-icon">◉</span>
-              <span>Blocklist</span>
+              <span>{{ _('Blocklist') }}</span>
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" data-path="settings" data-title="Settings">
+            <a class="nav-link" data-path="settings" data-title="{{ _('Settings') }}">
               <span class="nav-icon">⚙</span>
-              <span>Settings</span>
+              <span>{{ _('Settings') }}</span>
             </a>
           </li>
         </ul>

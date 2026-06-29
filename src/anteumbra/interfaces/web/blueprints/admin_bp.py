@@ -8,6 +8,7 @@
 v1.7.6-Patch30: 操作型接口返回HTML片段而非JSON
 """
 import base64
+from flask_babel import gettext as _
 import json
 import logging
 import os
@@ -855,36 +856,40 @@ def get_metric(metric_name):
 
         if metric_name == 'scan_total':
             value = data.get("scan_total", 0)
-            label = "扫描总计"
+            label = _("Scan Total")
             color = "#00ff00"
         elif metric_name == 'scan_suspicious':
             value = data.get("scan_suspicious", 0)
-            label = "高危文件"
+            label = _("High Risk")
             color = "#ffaa00"
         elif metric_name == 'memory_mb':
             value = data.get("memory_mb", 0)
-            label = "内存使用"
+            label = _("Memory")
             color = "#00ff00"
         elif metric_name == 'uptime_hours':
             value = (time.time() - metrics._start_time) / 3600
-            label = "运行时间"
+            label = _("Uptime")
             color = "#00ff00"
         else:
             value = 0
-            label = "未知"
+            label = _("Unknown")
             color = "#ff0000"
+
+        if metric_name == 'memory_mb':
+            val_str = f"{value:.1f} MB"
+        elif metric_name == 'uptime_hours':
+            val_str = f"{value:.1f} h"
+        else:
+            val_str = str(value)
 
         return f'''
         <div class="metric-label">{label}</div>
-        <div class="metric-value" style="color: {color};">
-            {f"{value:.1f} MB" if metric_name == 'memory_mb' else
-        f"{value:.1f} 小时" if metric_name == 'uptime_hours' else
-        str(value)}
-        </div>
+        <div class="metric-value" style="color: {color};">{val_str}</div>
         '''
     except Exception as e:
+        err_label = _("Error")
         return f'''
-        <div class="metric-label">错误</div>
+        <div class="metric-label">{err_label}</div>
         <div class="metric-value" style="color: #ff0000;">{str(e)}</div>
         '''
 
@@ -893,7 +898,23 @@ def get_metric(metric_name):
 @require_auth
 def metrics_page():
     """性能指标页面（完整视图）"""
-    return render_template('admin/metrics_panel.html')
+    # v1.9.6: Always pass explicit context dict to prevent Jinja2 UndefinedError.
+    # Jinja2 raises UndefinedError when accessing attributes on an undefined
+    # variable BEFORE the |default filter can run. Using .get() in the template
+    # is safe because dict.get() handles missing keys gracefully.
+    data = {}
+    try:
+        from anteumbra.infrastructure.monitoring.metrics import get_metrics
+        m = get_metrics()
+        data = m.get()
+    except Exception:
+        pass
+    ctx = {
+        "metrics": data,
+        "warning_threshold": 1,
+        "critical_threshold": 3,
+    }
+    return render_template('admin/metrics_panel.html', **ctx)
 
 @admin_bp.route('/metrics/data')
 @require_auth
@@ -936,33 +957,37 @@ def metrics_data():
             color_class = 'critical'
             color_code = '#ff4444'
 
-        # 渲染HTML（移除所有SSE属性）
+        # Render HTML with i18n labels (pre-call _() to avoid f-string backslash issue)
+        l_scan = _("Scan Total")
+        l_risk = _("High Risk")
+        l_mem = _("Memory")
+        l_uptime = _("Uptime")
         return f'''
         <div class="metrics-grid">
             <div class="metric-card">
-                <div class="metric-label">扫描总计</div>
+                <div class="metric-label">{l_scan}</div>
                 <div class="metric-value">{data.get("scan_total", 0)}</div>
             </div>
 
             <div class="metric-card">
-                <div class="metric-label">高危文件</div>
+                <div class="metric-label">{l_risk}</div>
                 <div class="metric-value {color_class}" style="color: {color_code};">
                     {suspicious_count}
                 </div>
             </div>
 
             <div class="metric-card">
-                <div class="metric-label">内存使用</div>
+                <div class="metric-label">{l_mem}</div>
                 <div class="metric-value">{data.get("memory_mb", 0):.1f} MB</div>
             </div>
 
             <div class="metric-card">
-                <div class="metric-label">运行时间</div>
-                <div class="metric-value">{data.get("uptime_seconds", 0)/3600:.1f} 小时</div>
+                <div class="metric-label">{l_uptime}</div>
+                <div class="metric-value">{data.get("uptime_seconds", 0)/3600:.1f} h</div>
             </div>
         </div>
 
-        {f'<div style="margin-top: 15px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ffaa00;"><small style="color: #ffaa00;">⚠️ Registry 队列积压: {data.get("registry_qsize", 0)} 条待保存</small></div>' if data.get("registry_qsize", 0) > 0 else ''}
+        {f'<div style="margin-top: 15px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ffaa00;"><small style="color: #ffaa00;">Registry queue backlog: {data.get("registry_qsize", 0)} items pending save</small></div>' if data.get("registry_qsize", 0) > 0 else ''}
 
         {f'<div style="margin-top: 10px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ff4444;"><small style="color: #ff4444;">🚨 告警队列阻塞: {data.get("alert_qsize", 0)} 条待发送</small></div>' if data.get("alert_qsize", 0) > 10 else ''}
         '''
@@ -1030,17 +1055,25 @@ def stream_logs():
 
     log_file = normalize_path(f"logs/{site_name}/monitor.log")
 
+    # v2.0: ?levels=all → Log Analyzer 全量日志; 默认 → 按配置过滤
+    show_all_levels = request.args.get('levels', '') == 'all'
+
     # v1.7.6新增：读取日志级别配置（支持热加载）
-    try:
-        config = ConfigRegistry.get_raw_config()
-        web_admin_cfg = config.get("web_admin", {})
-        allowed_levels = web_admin_cfg.get("sse_log_levels", ["INFO", "ERROR", "CRITICAL"])
-        # 转换为集合用于快速查找（标准化为大写）
-        allowed_levels_set = set(level.upper() for level in allowed_levels)
-        logger.debug(f"[SSE] 允许日志级别: {allowed_levels_set}")
-    except Exception as e:
-        logger.warning(f"[SSE] 读取日志级别配置失败: {e}，使用默认值")
-        allowed_levels_set = {"INFO", "ERROR", "CRITICAL"}
+    if not show_all_levels:
+        try:
+            config = ConfigRegistry.get_raw_config()
+            web_admin_cfg = config.get("web_admin", {})
+            allowed_levels = web_admin_cfg.get("sse_log_levels", ["INFO", "ERROR", "CRITICAL"])
+            # 转换为集合用于快速查找（标准化为大写），默认排除 DEBUG
+            allowed_levels_set = set(level.upper() for level in allowed_levels)
+            allowed_levels_set.discard("DEBUG")
+            logger.debug(f"[SSE] 允许日志级别: {allowed_levels_set}")
+        except Exception as e:
+            logger.warning(f"[SSE] 读取日志级别配置失败: {e}，使用默认值")
+            allowed_levels_set = {"INFO", "WARNING", "ERROR", "CRITICAL"}
+    else:
+        allowed_levels_set = None  # None = no filtering, show all
+        logger.info("[SSE][ANALYZER] 全量日志模式")
 
     def generate():
         """v1.7.6终极修复：日志分级过滤"""
@@ -1089,16 +1122,16 @@ def stream_logs():
 
                 line = f.readline()
                 if line:
-                    # 日志分级过滤（终极修复）
+                    # 日志分级过滤
                     log_line = line.strip()
 
-                    # 提取日志级别（格式: [timestamp] LEVEL - message）
-                    level_match = re.search(r'\] (\w+) -', log_line)
-                    if level_match:
-                        level = level_match.group(1).upper()
-                        # 检查是否在允许级别列表中
-                        if level not in allowed_levels_set:
-                            continue  # 跳过不允许的级别
+                    if allowed_levels_set is not None:
+                        # 提取日志级别（格式: [timestamp] LEVEL - message）
+                        level_match = re.search(r'\] (\w+) -', log_line)
+                        if level_match:
+                            level = level_match.group(1).upper()
+                            if level not in allowed_levels_set:
+                                continue  # 跳过不允许的级别
 
                     # 避免SSE自我循环
                     if "[SSE]" in log_line:

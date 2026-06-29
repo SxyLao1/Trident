@@ -10,6 +10,8 @@ var _scanResultsTab = 'new';
 var _scanStartTime = 0;
 var _scanComplete = false;
 var _scanLastId = '';
+var _scanSelected = new Set();
+var _scanQuarantined = new Set();
 
 function startScan() {
   var dir = document.getElementById('scan-target-dir');
@@ -125,30 +127,31 @@ function addResultRow(finding) {
   if (resultsCard && resultsCard.style.display === 'none') resultsCard.style.display = 'flex';
 
   var isNew = finding.classification === 'new';
-  var badgeCls = isNew ? 'badge-danger' : 'badge-warning';
-  var badgeText = isNew ? 'NEW' : 'KNOWN';
+  var isQuarantined = !!finding.quarantine_id;
   var rowClass = isNew ? 'result-new' : 'result-known';
   var esc = _escJs;
 
-  var actions = '';
-  if (isNew) {
-    actions = '<span style="display:inline-flex;gap:3px;white-space:nowrap;">'
-            + '<button class="btn btn-ghost btn-sm" style="font-size:9px;padding:2px 5px;" onclick="openFileViewerByPath(\'' + esc(finding.file_path) + '\')">View</button>'
-            + '<button class="btn btn-danger btn-sm quarantine-btn" style="font-size:9px;padding:2px 5px;" onclick="quarantineScanFile(\'' + esc(finding.file_path) + '\', this)">Quarantine</button>'
-            + '</span>';
+  // v2.0: Show quarantine status instead of New/Known classification
+  var qStatusHtml;
+  if (isQuarantined) {
+    qStatusHtml = '<span class="badge badge-success" style="font-size:9px;">Quarantined</span>';
+  } else if (finding.quarantine_id) {
+    qStatusHtml = '<span class="badge badge-warning" style="font-size:9px;">Q: ' + _escHtml(finding.quarantine_id.substring(0, 10)) + '</span>';
   } else {
-    actions = '<span style="display:inline-flex;gap:3px;white-space:nowrap;">'
-            + '<button class="btn btn-ghost btn-sm" style="font-size:9px;padding:2px 5px;" onclick="openFileViewerByPath(\'' + esc(finding.file_path) + '\')">View</button>'
-            + '<span style="color:#888;font-size:9px;">Known</span>'
-            + '</span>';
+    qStatusHtml = '<span style="color:#ff4444;font-size:9px;">Active</span>';
   }
 
+  var actions = '<span style="display:inline-flex;gap:3px;white-space:nowrap;">'
+    + '<button class="btn btn-ghost btn-sm" style="font-size:9px;padding:2px 5px;" onclick="openFileViewerByPath(\'' + esc(finding.file_path) + '\')">View</button>'
+    + '</span>';
+
   var row = '<tr class="' + rowClass + '" data-file-path="' + _escHtml(finding.file_path) + '" style="border-bottom:1px solid #111;">'
+    + '<td style="padding:3px 6px;text-align:center;"><input type="checkbox" class="scan-cb" data-file-path="' + _escHtml(finding.file_path) + '" onchange="scanUpdateSel()" onclick="event.stopPropagation()"></td>'
     + '<td style="padding:3px 8px;"><code style="color:#ccc;font-size:10px;">' + _escHtml(finding.file_name) + '</code></td>'
     + '<td style="padding:3px 8px;color:#555;font-size:9px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + _escHtml(finding.file_path) + '">' + _escHtml(finding.file_path) + '</td>'
     + '<td style="padding:3px 8px;color:#888;font-size:10px;">' + _escHtml(finding.engine || '') + '</td>'
     + '<td style="padding:3px 8px;font-size:10px;">' + (finding.features || []).map(function(f) { return '<span class="badge badge-blue">' + _escHtml(f) + '</span>'; }).join(' ') + '</td>'
-    + '<td style="padding:3px 8px;text-align:center;"><span class="badge ' + badgeCls + '" style="font-size:9px;">' + badgeText + '</span></td>'
+    + '<td style="padding:3px 8px;text-align:center;">' + qStatusHtml + '</td>'
     + '<td style="padding:3px 8px;text-align:right;white-space:nowrap;">' + actions + '</td>'
     + '</tr>';
 
@@ -195,13 +198,22 @@ function quarantineScanFile(filePath, btn) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': token },
     body: 'file_path=' + encodeURIComponent(filePath)
   })
-  .then(function(r) { return r.json(); })
+  .then(function(r) {
+    if (!r.ok) {
+      return r.json().then(function(d) { throw new Error(d.error || 'HTTP ' + r.status); })
+        .catch(function() { throw new Error('Server error: HTTP ' + r.status); });
+    }
+    return r.json();
+  })
   .then(function(d) {
     if (d.success) {
       btn.outerHTML = '<span class="badge badge-success" style="font-size:9px;">Quarantined</span>';
     } else {
       alert('Quarantine failed: ' + (d.error || 'unknown'));
     }
+  })
+  .catch(function(e) {
+    alert('Quarantine failed: ' + e.message);
   });
 }
 
@@ -260,20 +272,97 @@ function viewScanResults(scanId) {
   var tbody = document.getElementById('results-tbody');
   var card = document.getElementById('scan-results-card');
   if (!tbody || !card) return;
-  tbody.innerHTML = '<tr><td colspan="6" style="padding:12px;text-align:center;"><div class="spinner"></div><p>Loading results...</p></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" style="padding:12px;text-align:center;"><div class="spinner"></div><p>Loading results...</p></td></tr>';
   card.style.display = 'flex';
   _scanFindings = [];
+  _scanSelected.clear();
+  _scanQuarantined.clear();
   fetch('/admin/scanner/results?scan_id=' + encodeURIComponent(scanId))
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      if (d.error) { tbody.innerHTML = '<tr><td colspan="6" style="color:#ff4444;padding:12px;">Error: ' + d.error + '</td></tr>'; return; }
+      if (d.error) { tbody.innerHTML = '<tr><td colspan="7" style="color:#ff4444;padding:12px;">Error: ' + d.error + '</td></tr>'; return; }
       tbody.innerHTML = '';
       _scanFindings = d.findings || [];
       _scanFindings.forEach(function(f) { addResultRow(f); });
       updateResultCounts();
+      scanUpdateSel();
       _scanLastId = d.scan_id;
       document.getElementById('scan-report-btn').style.display = '';
       document.getElementById('scan-progress-card').style.display = 'none';
     })
-    .catch(function() { tbody.innerHTML = '<tr><td colspan="6" style="color:#ff4444;padding:12px;">Failed to load.</td></tr>'; });
+    .catch(function() { tbody.innerHTML = '<tr><td colspan="7" style="color:#ff4444;padding:12px;">Failed to load.</td></tr>'; });
+}
+
+// v2.0: Scan results — cross-result selection + batch quarantine
+function scanUpdateSel() {
+  _scanSelected.clear();
+  document.querySelectorAll('.scan-cb:checked').forEach(function(cb) {
+    _scanSelected.add(cb.dataset.filePath);
+  });
+  var count = _scanSelected.size;
+  var countEl = document.getElementById('scan-selected-count');
+  var btn = document.getElementById('scan-quarantine-sel-btn');
+  if (countEl) { countEl.style.display = count > 0 ? '' : 'none'; countEl.textContent = count + ' selected'; }
+  if (btn) btn.disabled = count === 0;
+}
+
+function scanToggleAll(masterCb) {
+  document.querySelectorAll('.scan-cb').forEach(function(cb) {
+    cb.checked = masterCb.checked;
+  });
+  scanUpdateSel();
+}
+
+function scanSelectAll() {
+  document.querySelectorAll('.scan-cb').forEach(function(cb) { cb.checked = true; });
+  document.getElementById('scan-select-all-cb').checked = true;
+  scanUpdateSel();
+}
+
+function scanClearSel() {
+  document.querySelectorAll('.scan-cb').forEach(function(cb) { cb.checked = false; });
+  document.getElementById('scan-select-all-cb').checked = false;
+  scanUpdateSel();
+}
+
+function scanQuarantineSelected() {
+  var paths = Array.from(_scanSelected);
+  if (!paths.length) return;
+  if (!confirm('Quarantine ' + paths.length + ' selected files?')) return;
+  var csrf = document.querySelector('meta[name="csrf-token"]');
+  var token = csrf ? csrf.content : '';
+  var done = 0;
+  var failed = 0;
+  var total = paths.length;
+
+  function processNext() {
+    if (paths.length === 0) {
+      alert('Done: ' + done + ' quarantined, ' + failed + ' failed');
+      _scanSelected.clear();
+      scanUpdateSel();
+      return;
+    }
+    var fp = paths.shift();
+    fetch('/admin/scanner/quarantine', {
+      method: 'POST',
+      headers: {'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':token},
+      body: 'file_path=' + encodeURIComponent(fp)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.success) {
+        done++;
+        _scanQuarantined.add(fp);
+        // Update row status
+        var row = document.querySelector('tr[data-file-path="' + fp.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '"]');
+        if (row) {
+          var td = row.querySelector('td:nth-child(6)');
+          if (td) td.innerHTML = '<span class="badge badge-success" style="font-size:9px;">Quarantined</span>';
+        }
+      } else { failed++; }
+      processNext();
+    })
+    .catch(function() { failed++; processNext(); });
+  }
+  processNext();
 }

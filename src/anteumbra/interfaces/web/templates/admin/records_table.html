@@ -12,11 +12,8 @@
     <button class="btn btn-ghost btn-sm rec-batch-btn" style="font-size:10px;padding:3px 6px;color:#ff4444;" disabled onclick="batchRecAction('delete')">Del Sel</button>
     <span style="flex:1;"></span>
     <input type="text" class="form-input rec-search" style="width:160px;font-size:10px;padding:3px 6px;" placeholder="Search..."
-           hx-get="/admin/records?{{ 'audit=true&' if audit_mode else '' }}compact=1"
-           hx-trigger="keyup changed delay:400ms"
-           hx-target="#{{ container_id }}"
-           hx-swap="outerHTML"
-           name="q">
+           oninput="filterRecordsTable(this)"
+           data-container="{{ container_id }}">
   </div>
 
   <!-- Record List -->
@@ -27,16 +24,22 @@
       <div class="record-info" style="flex:1; min-width:0;">
         <div class="record-title">{{ record.display_name }}</div>
         <div class="record-meta">
-          <span class="badge badge-{{ 'danger' if record.alerted else 'safe' }}">
-            {{ 'ALERT' if record.alerted else 'OK' }}{% if record.marked_false_positive %} <span style="opacity:0.7;font-size:10px;">(FP)</span>{% endif %}
-          </span>
+          {% if record.marked_false_positive %}
+          <span class="badge" style="background:#9b59b6;color:#fff;font-size:9px;padding:1px 5px;">FP</span>
+          {% elif record.deleted_at and not record.file_exists %}
+          <span class="badge" style="background:#666;color:#fff;font-size:9px;padding:1px 5px;">DEL</span>
+          {% elif record.alerted %}
+          <span class="badge" style="background:#e74c3c;color:#fff;font-size:9px;padding:1px 5px;">ALERT</span>
+          {% else %}
+          <span class="badge" style="background:#27ae60;color:#fff;font-size:9px;padding:1px 5px;">ACTIVE</span>
+          {% endif %}
           <span style="color: var(--color-text-muted);">|</span>
           <span>{{ record.detected_at }}</span>
           <span style="color: var(--color-text-muted);">|</span>
           <span>Comm: {{ record.communication_count }}</span>
           <span style="color: var(--color-text-muted);">|</span>
           <span>{{ record.features|join(', ') if record.features else 'None' }}</span>
-          {% if record.quarantine_id %}<span style="color:#ff6b35;font-size:9px;">| Q</span>{% endif %}
+          {% if record.quarantine_id %}<span style="color:#ff6b35;font-size:9px;">| Q:{{ record.quarantine_id[:12] }}</span>{% endif %}
           {% if record.deleted_at %}<span style="color:#888;font-size:9px;">| Del</span>{% endif %}
         </div>
       </div>

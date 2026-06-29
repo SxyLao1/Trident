@@ -260,7 +260,8 @@ def file_clusters_page():
         clusters = sorted(engine._clusters.values(), key=lambda c: c.size, reverse=True)
         enriched = []
         for c in clusters:
-            if c.size < 2:
+            # v2.0 fix: Include single-file clusters (was size < 2 filter)
+            if c.size < 1:
                 continue
             enriched.append({
                 "cluster_id": c.cluster_id,

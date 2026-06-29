@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anteumbra"
-version = "2.0.0.dev0"
-description = "Lightweight Web Perimeter Security — Passive Detection + Semi-Active Response"
+version = "1.0.0.dev0"
+description = "Anteumbra — Web Perimeter Threat Intelligence. Passive detection, semi-active response, file-level forensics."
 requires-python = ">=3.8"
 license = "MIT"
 authors = [{name = "SxyLao1"}]
@@ -25,8 +25,10 @@ dependencies = [
     "flask>=2.3.3,<3.0.0",
     "flask-wtf>=1.2.1",
     "flask-session>=0.5.0",
+    "flask-babel>=3.1.0",
     "wtforms>=3.1.2",
     "watchdog>=3.0.0",
+    "click>=8.1.0",
     "requests>=2.32.3",
     "psutil>=5.9.8",
     "tomli>=2.0.1",

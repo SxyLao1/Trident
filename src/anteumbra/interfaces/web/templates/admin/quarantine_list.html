@@ -22,8 +22,7 @@
     <button class="btn btn-sm {% if current_status == 'deleted' %}btn-primary{% else %}btn-ghost{% endif %}" style="font-size:10px;padding:3px 6px;"
             hx-get="/admin/quarantine?status=deleted{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container" hx-swap="outerHTML">Deleted</button>
     <input type="text" class="form-input" style="width:140px;font-size:10px;padding:3px 6px;" placeholder="Search..."
-           hx-get="/admin/quarantine?status={{ current_status }}{% if compact %}&compact=1{% endif %}"
-           hx-trigger="keyup changed delay:400ms" hx-target="#quarantine-list-container" hx-swap="outerHTML" name="q">
+           oninput="filterQuarantineTable(this)">
   </div>
 
   <!-- Stats -->

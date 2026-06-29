@@ -3,7 +3,7 @@
   <!-- 安全报告面板 -->
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header">
-      <span><span class="card-header-icon">◆</span> SECURITY REPORT</span>
+      <span><span class="card-header-icon">◆</span> {{ _('Security Report') }}</span>
     </div>
     <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto;" id="overview-stats"
          hx-get="/admin/dashboard_content"
@@ -16,7 +16,7 @@
   <!-- 系统指标面板 -->
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header">
-      <span><span class="card-header-icon">◆</span> SYSTEM METRICS</span>
+      <span><span class="card-header-icon">◆</span> {{ _('System Metrics') }}</span>
       <span class="badge badge-info">Live</span>
     </div>
     <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto;" id="overview-metrics"
@@ -30,7 +30,7 @@
   <!-- 活跃威胁（未隔离） -->
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header">
-      <span><span class="card-header-icon">⚡</span> ACTIVE THREATS</span>
+      <span><span class="card-header-icon">⚡</span> {{ _('Active Threats') }}</span>
       <span class="badge badge-danger">Needs Attention</span>
     </div>
     <div class="card-body" style="flex: 1; padding: 0; overflow-y: auto;">
@@ -46,7 +46,7 @@
   <!-- 实时日志流 -->
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header" style="display: flex; align-items: center; gap: 8px;">
-      <span style="flex: 1;"><span class="card-header-icon">◆</span> LIVE LOG STREAM</span>
+      <span style="flex: 1;"><span class="card-header-icon">◆</span> {{ _('LIVE LOG STREAM') }}</span>
       <input type="text" class="form-input" style="width: 140px; font-size: 10px; padding: 3px 6px;"
              placeholder="Quick filter..." oninput="filterLogStream()" id="log-filter-input">
       <span class="badge badge-info">SSE</span>

@@ -1,12 +1,11 @@
-"""Anteumbra v2.0-alpha entry point — migrated from Trident app.py"""
-import sys
-import os
+"""Anteumbra v2.0 entry point — delegates to CLI."""
+from anteumbra.cli.main import cli
+
 
 def main():
-    print(f"Anteumbra v2.0.0.dev0 — WebShell Detection System")
-    print(f"Python {sys.version}")
-    print(f"Run via: python -m anteumbra.interfaces.web.factory")
-    print(f"Or use legacy: python -m trident_app")
+    """Entry point for pyproject.toml [project.scripts]."""
+    cli()
+
 
 if __name__ == "__main__":
     main()

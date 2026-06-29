@@ -1,14 +1,10 @@
 <!-- v1.8.0: YARA Rules — 批量操作 + 全宽工具栏 -->
 <div id="yara-rules-container" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;">
-  {% if not compact %}
-  <!-- Unified toolbar: search + batch + upload -->
+  <!-- Unified toolbar: search + batch + upload (always visible, v2.0 fix) -->
   <div style="display: flex; gap: 12px; margin-bottom: 12px; align-items: center; flex-wrap: wrap;">
     <input type="text" class="form-input" style="flex: 1; min-width: 200px; max-width: 400px;" placeholder="Search rules..."
            name="q" value="{{ request.args.get('q', '') }}"
-           hx-get="/admin/yara/search?compact=1"
-           hx-trigger="keyup changed delay:500ms"
-           hx-target="#yara-rules-container"
-           hx-swap="outerHTML">
+           oninput="yaraClientFilter(this)">
     <span style="display: flex; gap: 8px; align-items: center;">
       <button id="yara-select-all-btn" class="btn btn-ghost btn-sm" style="font-size: 11px;"
               onclick="yaraSelectAll()">Select All</button>
@@ -21,7 +17,6 @@
       <button class="btn btn-primary btn-sm" onclick="window._yaraShowUploadModal()">[+] Upload</button>
     </span>
   </div>
-  {% endif %}
 
   <div class="record-list">
     {% for rule in rules %}

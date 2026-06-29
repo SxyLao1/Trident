@@ -58,8 +58,18 @@ function batchRecAction(action) {
     headers: {'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':token},
     body: body
   })
-  .then(function(r) { return r.json(); })
+  .then(function(r) {
+    if (!r.ok && r.status === 400) {
+      return r.json().then(function(d) {
+        if (d.code === 'csrf_expired') { alert('Session expired. Please refresh the page.'); return null; }
+        throw new Error(d.error || 'Bad request');
+      });
+    }
+    return r.json();
+  })
   .then(function(d) {
+    if (!d) return;  // CSRF error already handled
+    if (d.error) { alert('Batch failed: ' + d.error); return; }
     alert('Done: ' + (d.success||0) + ' success, ' + (d.skipped||0) + ' skipped, ' + (d.failed||0) + ' failed');
     window._recSelected.clear();
     var container = document.querySelector('[id^="records-table-container"]');
@@ -128,8 +138,18 @@ function batchQAction(action) {
     headers: {'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':token},
     body: body
   })
-  .then(function(r) { return r.json(); })
+  .then(function(r) {
+    if (!r.ok && r.status === 400) {
+      return r.json().then(function(d) {
+        if (d.code === 'csrf_expired') { alert('Session expired. Please refresh the page.'); return null; }
+        throw new Error(d.error || 'Bad request');
+      });
+    }
+    return r.json();
+  })
   .then(function(d) {
+    if (!d) return;
+    if (d.error) { alert('Batch failed: ' + d.error); return; }
     alert('Done: ' + (d.success||0) + ' success, ' + (d.failed||0) + ' failed');
     window._qSelected.clear();
     var container = document.getElementById('quarantine-list-container');

@@ -10,6 +10,8 @@ window.TridentSSEManager = {
   healthCheckTimer: null,
   MAX_LOG_LINES: 500,
   historyLoaded: false,
+  _analyzerOpen: false,
+  _allLevels: false,
 
   getConnection() {
     if (this.eventSource && this.eventSource.readyState === EventSource.OPEN) {
@@ -55,7 +57,8 @@ window.TridentSSEManager = {
     if (!token) { console.error('[SSE-MGR] Token missing'); return null; }
 
     this.updateStatus('connecting');
-    const sseUrl = '/admin/stream_logs?token=' + encodeURIComponent(token);
+    var sseUrl = '/admin/stream_logs?token=' + encodeURIComponent(token);
+    if (this._allLevels) { sseUrl += '&levels=all'; }
     this.eventSource = new EventSource(sseUrl, { withCredentials: true });
 
     this.eventSource.onopen = () => {
@@ -92,9 +95,8 @@ window.TridentSSEManager = {
     return this.eventSource;
   },
 
-  appendLogLine(rawData) {
-    const logStream = document.getElementById('log-stream');
-    if (!logStream) return;
+  _appendToStream(container, rawData) {
+    if (!container) return;
 
     let logClass = 'info';
     const upper = rawData.toUpperCase();
@@ -108,27 +110,81 @@ window.TridentSSEManager = {
       logClass = 'debug';
     }
 
-    if (rawData.indexOf('[SSE]') === 0 && (rawData.indexOf('连接') !== -1 || rawData.indexOf('监控') !== -1)) {
-      return;
-    }
-
     const line = document.createElement('div');
     line.className = 'log-line ' + logClass;
     line.textContent = rawData;
 
+    container.appendChild(line);
+
+    while (container.children.length > this.MAX_LOG_LINES) {
+      container.removeChild(container.firstChild);
+    }
+
+    // v2.0: Use requestAnimationFrame to ensure layout is complete before scrolling
+    requestAnimationFrame(function() {
+      container.scrollTop = container.scrollHeight;
+    });
+  },
+
+  appendLogLine(rawData) {
+    if (rawData.indexOf('[SSE]') === 0 && (rawData.indexOf('连接') !== -1 || rawData.indexOf('监控') !== -1)) {
+      return;
+    }
+
+    // Check search filter
     const filterInput = document.getElementById('log-search-input');
     const term = filterInput ? filterInput.value.toLowerCase() : '';
-    if (term && !rawData.toLowerCase().includes(term)) {
-      line.style.display = 'none';
+    const matches = !term || rawData.toLowerCase().includes(term);
+
+    // Write to Log Analyzer page (#log-stream)
+    const logStream = document.getElementById('log-stream');
+    if (logStream) {
+      this._appendToStream(logStream, rawData);
+      if (!matches && logStream.lastChild) {
+        logStream.lastChild.style.display = 'none';
+      }
     }
 
-    logStream.appendChild(line);
-
-    while (logStream.children.length > this.MAX_LOG_LINES) {
-      logStream.removeChild(logStream.firstChild);
+    // Also write to dashboard quadrant (#live-log-stream) for real-time update
+    const liveStream = document.getElementById('live-log-stream');
+    if (liveStream) {
+      // Remove placeholder on first message
+      const placeholder = liveStream.querySelector('.empty-state');
+      if (placeholder) placeholder.remove();
+      this._appendToStream(liveStream, rawData);
+      if (!matches && liveStream.lastChild) {
+        liveStream.lastChild.style.display = 'none';
+      }
     }
 
-    logStream.scrollTop = logStream.scrollHeight;
+    // v2.0: Also write to Log Analyzer modal when open
+    if (this._analyzerOpen) {
+      const analyzerContent = document.getElementById('analyzer-log-content');
+      if (analyzerContent) {
+        const analyzerPlaceholder = analyzerContent.querySelector('.empty-state');
+        if (analyzerPlaceholder) analyzerPlaceholder.remove();
+        this._appendToStream(analyzerContent, rawData);
+        if (!matches && analyzerContent.lastChild) {
+          analyzerContent.lastChild.style.display = 'none';
+        }
+      }
+    }
+  },
+
+  reconnectWithAllLevels() {
+    this.disconnect();
+    this.historyLoaded = true;  // Skip history reload
+    this._allLevels = true;
+    this._analyzerOpen = true;
+    return this.createConnection();
+  },
+
+  reconnectNormal() {
+    this.disconnect();
+    this.historyLoaded = true;  // Skip history reload
+    this._allLevels = false;
+    this._analyzerOpen = false;
+    return this.createConnection();
   },
 
   disconnect() {

@@ -14,6 +14,11 @@ from anteumbra.infrastructure.utils.path_utils import normalize_path
 from anteumbra.infrastructure.config.version import get_version
 
 def main():
+    # Write PID file for stop.bat / anteumbra stop
+    pid_dir = Path("data")
+    pid_dir.mkdir(parents=True, exist_ok=True)
+    (pid_dir / "anteumbra.pid").write_text(str(os.getpid()))
+
     ConfigRegistry.initialize()
     websites = ConfigRegistry.get_enabled_websites()
     if not websites:
@@ -35,9 +40,11 @@ def main():
     # ── Flask ──────────────────────────────────────────
     from anteumbra.interfaces.web.factory import create_app, run_app
     app = create_app()
-    app.config.update(
-        SESSION_COOKIE_SECURE=True, SESSION_COOKIE_HTTPONLY=True,
-        SESSION_COOKIE_SAMESITE='Lax')
+    # v1.9.6: SESSION_COOKIE_SECURE=False on HTTP dev, True on HTTPS prod
+    # create_app() reads session_cookie_secure from config; don't override here
+    app.config.setdefault('SESSION_COOKIE_SECURE', False)
+    app.config.setdefault('SESSION_COOKIE_HTTPONLY', True)
+    app.config.setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
     threading.Thread(target=run_app, kwargs={"host": host, "port": port},
                      daemon=True, name="FlaskServer").start()
     print("[OK] Flask started")

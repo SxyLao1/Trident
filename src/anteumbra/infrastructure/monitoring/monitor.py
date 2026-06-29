@@ -339,9 +339,9 @@ class FileMonitorHandler(FileSystemEventHandler):
         from anteumbra.infrastructure.monitoring.notifier import get_notifier
         try:
             self.notifier = get_notifier(self.logger)
-            log_with_symbol("success", "info", "初始化成功", self.logger)
+            log_with_symbol("success", "info", "Monitor initialized", self.logger)
         except Exception as e:
-            log_with_symbol("error_notifier_init", "error", f"初始化失败: {e}", self.logger)
+            log_with_symbol("error_notifier_init", "error", f"Monitor init failed: {e}", self.logger)
 
     def _get_system_status(self) -> dict:
         """v1.8.4: 读取系统运行状态（供通知消息使用）"""
@@ -424,19 +424,19 @@ class FileMonitorHandler(FileSystemEventHandler):
 
             for pattern in php_patterns:
                 if pattern in content[:1024]:
-                    log_with_symbol("detect_php", "warning", f"检测到PHP特征: {file_path.name}", self.logger)
+                    log_with_symbol("detect_php", "warning", f"PHP signature detected: {file_path.name}", self.logger)
                     return True
 
             if b'<%@' in content[:256] or b'runtime' in content.lower()[:256]:
-                log_with_symbol("detect_jsp", "warning", f"检测到JSP特征: {file_path.name}", self.logger)
+                log_with_symbol("detect_jsp", "warning", f"JSP signature detected: {file_path.name}", self.logger)
                 return True
 
             if b'<%' in content[:256] and b'%>' in content[:256]:
-                log_with_symbol("detect_asp", "warning", f"检测到ASP特征: {file_path.name}", self.logger)
+                log_with_symbol("detect_asp", "warning", f"ASP signature detected: {file_path.name}", self.logger)
                 return True
 
         except Exception as e:
-            log_with_symbol("detect_error", "warning", f"检测失败 {file_path}: {e}", self.logger)
+            log_with_symbol("detect_error", "warning", f"Detection failed {file_path}: {e}", self.logger)
 
         return False
 
@@ -467,19 +467,19 @@ class FileMonitorHandler(FileSystemEventHandler):
             header = file_path.read_bytes()[:256]
 
             if header.startswith(b'<?php') or b'<?=' in header or b'<? ' in header:
-                log_with_symbol("detect_php", "warning", f"检测到PHP脚本: {file_path.name}", self.logger)
+                log_with_symbol("detect_php", "warning", f"PHP script detected: {file_path.name}", self.logger)
                 return True
 
             if header.startswith(b'<%@') or b'%!' in header or b'%\n' in header:
-                log_with_symbol("detect_jsp", "warning", f"检测到JSP脚本: {file_path.name}", self.logger)
+                log_with_symbol("detect_jsp", "warning", f"JSP script detected: {file_path.name}", self.logger)
                 return True
 
             if header.startswith(b'<%') and b'%>' in header[:100]:
-                log_with_symbol("detect_asp", "warning", f"检测到ASP脚本: {file_path.name}", self.logger)
+                log_with_symbol("detect_asp", "warning", f"ASP script detected: {file_path.name}", self.logger)
                 return True
 
         except Exception as e:
-            log_with_symbol("detect_error", "warning", f"检测失败 {file_path}: {e}", self.logger)
+            log_with_symbol("detect_error", "warning", f"Detection failed {file_path}: {e}", self.logger)
 
         return False
 
@@ -522,6 +522,22 @@ class FileMonitorHandler(FileSystemEventHandler):
 
             scan_result = scan_func(event_path, self.scan_options, self.logger)
 
+            # v2.0: Emit FileScannedEvent to PluginManager (dual-write: existing flow + event-driven)
+            try:
+                from anteumbra.application.plugin_manager import get_plugin_manager
+                pm = get_plugin_manager()
+                if pm.is_enabled:
+                    pm.emit("file_scanned", "monitor", {
+                        "file_path": str(event_path),
+                        "event_type": event_type,
+                        "is_suspicious": scan_result.is_suspicious if scan_result else False,
+                        "engine": scan_result.engine if scan_result else "unknown",
+                        "features": scan_result.features if scan_result else [],
+                        "score": scan_result.score if scan_result and hasattr(scan_result, 'score') else 0,
+                    })
+            except Exception:
+                pass
+
             if scan_result and scan_result.is_suspicious:
                 log_with_symbol("scan_hit", "critical",
                                 f"{event_path.name} | 引擎: {scan_result.engine}", self.logger)
@@ -532,25 +548,66 @@ class FileMonitorHandler(FileSystemEventHandler):
                     from anteumbra.infrastructure.suspicious_registry import add, mark_quarantined
                     from anteumbra.infrastructure.quarantine import is_recently_restored
 
-                    # v1.8.4: 本地文件检测——尝试从 WAF 日志获取真实攻击IP
+                    # v1.8.4 / v2.0: 本地文件检测 — 多源IP溯源
+                    # 优先级: WAF事件日志 > LogAnalyzer(access log) > 默认127.0.0.1
                     first_seen_ip = "127.0.0.1"
                     event_name = event_path.name.lower()
+
+                    # Source 1: WAF events (waf_events.jsonl)
+                    # v2.0 fix: Match by TIME WINDOW, not by filename.
+                    # WAF events log the upload endpoint URL (e.g. /upload.php),
+                    # NOT the resulting webshell filename. So we look for any
+                    # upload (POST/PUT) from a non-localhost IP within ±5s of
+                    # the file's detection time.
                     try:
                         waf_log = Path("data/waf_events.jsonl")
                         if waf_log.exists():
+                            from datetime import datetime as _dt, timedelta as _td
+                            now_dt = _dt.now()
                             with open(str(waf_log), 'r', encoding='utf-8') as f:
                                 lines = f.readlines()
                             for line in reversed(lines[-200:]):
-                                if not line.strip(): continue
+                                if not line.strip():
+                                    continue
                                 evt = json.loads(line.strip())
-                                url = (evt.get("url", "") or "").lower()
-                                if event_name in url or url.endswith(event_name):
-                                    if evt.get("src_ip") and evt["src_ip"] not in ("127.0.0.1", "::1"):
-                                        first_seen_ip = evt["src_ip"]
-                                        self.logger.info(f"[MONITOR] Resolved attacker IP from WAF: {first_seen_ip} -> {event_name}")
-                                        break
+                                src_ip = evt.get("src_ip", "")
+                                if not src_ip or src_ip in ("127.0.0.1", "::1"):
+                                    continue
+                                # Check timestamp proximity (±5 seconds)
+                                evt_ts_str = evt.get("timestamp", "")
+                                if evt_ts_str:
+                                    try:
+                                        # Parse ISO timestamp (e.g. "2026-06-29T22:16:00.041517")
+                                        evt_dt = _dt.fromisoformat(evt_ts_str.replace("Z", "+00:00"))
+                                        if abs((now_dt - evt_dt).total_seconds()) <= 15:
+                                            method = evt.get("method", "") or evt.get("http_method", "")
+                                            # Prefer POST/PUT (upload actions); accept empty too
+                                            if method.upper() in ("POST", "PUT", ""):
+                                                first_seen_ip = src_ip
+                                                self.logger.info(f"[MONITOR] Resolved attacker IP from WAF: {first_seen_ip} -> {event_name} (time-window match, Δ={abs((now_dt - evt_dt).total_seconds()):.1f}s)")
+                                                break
+                                    except (ValueError, TypeError, AttributeError):
+                                        pass
                     except Exception:
                         pass
+
+                    # Source 2: LogAnalyzer — Apache/Nginx access log (正则解析)
+                    if first_seen_ip == "127.0.0.1":
+                        try:
+                            from anteumbra.infrastructure.monitoring.log_analyzer import LogAnalyzer
+                            analyzer = LogAnalyzer(self.website, self.logger)
+                            result = analyzer.analyze_shell_access(event_path)
+                            if result and result.get("suspicious_ips"):
+                                # Pick the IP with the most hits (most likely the attacker)
+                                best_ip = max(result["suspicious_ips"], key=result["suspicious_ips"].get)
+                                if best_ip and best_ip not in ("127.0.0.1", "::1"):
+                                    first_seen_ip = best_ip
+                                    self.logger.info(
+                                        f"[MONITOR] Resolved attacker IP from access log: {first_seen_ip} -> {event_name} "
+                                        f"(hits: {result['suspicious_ips'][best_ip]}, log: {result.get('log_path', '?')})"
+                                    )
+                        except Exception:
+                            pass
 
                     # v1.8.4: 本地文件检测CRITICAL告警——内网边界突破风险
                     self._init_notifier()
@@ -569,6 +626,19 @@ class FileMonitorHandler(FileSystemEventHandler):
 
                     # Step 1: 注册到Registry（从scanner移至此，确保不遗漏），传入IP
                     add(event_path, scan_result.features, first_seen_ip=first_seen_ip, detection_source="passive")
+
+                    # v2.0: Emit RecordAddedEvent to PluginManager
+                    try:
+                        pm = get_plugin_manager()
+                        if pm.is_enabled:
+                            pm.emit("record_added", "monitor", {
+                                "file_path": str(event_path),
+                                "features": scan_result.features,
+                                "first_seen_ip": first_seen_ip,
+                                "detection_source": "passive",
+                            })
+                    except Exception:
+                        pass
 
                     # v1.8.1: 喂给画像引擎（日志无IP时用127.0.0.1）
                     try:
@@ -609,6 +679,17 @@ class FileMonitorHandler(FileSystemEventHandler):
                             quarantined = True
                             log_with_symbol("quarantine_add", "info",
                                             f"[QUARANTINE] 已隔离: {event_path.name} -> {result['quarantine_id']}", self.logger)
+                            # v2.0: Emit FileQuarantinedEvent to PluginManager
+                            try:
+                                pm = get_plugin_manager()
+                                if pm.is_enabled:
+                                    pm.emit("file_quarantined", "monitor", {
+                                        "file_path": str(event_path),
+                                        "quarantine_id": result["quarantine_id"],
+                                        "rule_name": rule_name,
+                                    })
+                            except Exception:
+                                pass
                         else:
                             self.logger.warning(f"[QUARANTINE] 隔离跳过: {event_path.name} (文件不存在)")
                 except Exception as qe:
@@ -902,7 +983,24 @@ class FileMonitorHandler(FileSystemEventHandler):
                 if not (old.startswith(path_key) or new.startswith(path_key))
             }
         else:
-            log_with_symbol("delete_file", "info", f"{event_path.name}", self.logger)
+            # v2.0 fix: Check if this file was quarantined before logging DELETE
+            from anteumbra.infrastructure.suspicious_registry import get_all
+            is_quarantined = False
+            try:
+                all_records = get_all(include_deleted=True)
+                rk = path_to_key(event_path)
+                for r in all_records:
+                    if isinstance(r, dict) and r.get("file_path") == rk and r.get("quarantine_id"):
+                        is_quarantined = True
+                        break
+            except Exception:
+                pass
+
+            if is_quarantined:
+                log_with_symbol("quarantine_add", "info",
+                                f"[QUARANTINE][FILE] 隔离完成(文件已移走): {event_path.name}", self.logger)
+            else:
+                log_with_symbol("delete_file", "info", f"[DELETE][FILE] {event_path.name}", self.logger)
 
         # Registry清理
         from anteumbra.infrastructure.suspicious_registry import remove
@@ -960,7 +1058,7 @@ class WebsiteMonitor:
     def start(self):
         """启动监控"""
         if self._is_running:
-            log_with_symbol("warning", "warning", "重复启动，已忽略", self.logger)
+            log_with_symbol("warning", "warning", "Duplicate start ignored", self.logger)
             return
 
         self.observer.start()
@@ -968,10 +1066,10 @@ class WebsiteMonitor:
         time.sleep(0.5)
 
         if hasattr(self.observer, 'is_alive') and not self.observer.is_alive():
-            log_with_symbol("error", "error", "Observer启动失败", self.logger)
+            log_with_symbol("error", "error", "Observer start failed", self.logger)
             return
 
-        log_with_symbol("success", "critical", "监控已成功启动！", self.logger)
+        log_with_symbol("success", "critical", "Monitor started successfully", self.logger)
 
     def stop(self):
         """停止监控"""
@@ -993,7 +1091,7 @@ class WebsiteMonitor:
                             "Observer未能在10秒内停止，可能资源泄漏", self.logger)
 
         self._is_running = False
-        log_with_symbol("info", "info", "监控已停止", self.logger)
+        log_with_symbol("info", "info", "Monitor stopped", self.logger)
 
         if hasattr(self, 'handler'):
             del self.handler

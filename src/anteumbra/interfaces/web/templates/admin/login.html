@@ -26,7 +26,7 @@
     <form class="login-form" method="POST" action="{{ url_for('admin.login') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-group">
-        <label class="form-label">Username</label>
+        <label class="form-label">{{ _('Username') }}</label>
         <input type="text" name="username" class="form-input" placeholder="root" required autofocus>
       </div>
       <div class="form-group">

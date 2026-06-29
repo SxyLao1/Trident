@@ -8,10 +8,11 @@
 Flask应用工厂：v1.7.3分离access.log与monitor.log
 """
 import logging
+import os
 import secrets
 from datetime import timedelta
 
-from flask import Flask, request, session
+from flask import Flask, request, session, jsonify
 from typing import Optional
 from flask_session import Session
 from flask_wtf.csrf import CSRFProtect
@@ -37,16 +38,41 @@ def create_app() -> Flask:
     # 创建主应用
     app = Flask(__name__)
 
-    # v2.0: Flask-Babel i18n (language from ?lang= or cookie)
+    # v2.0: Flask-Babel i18n (language from ?lang= or cookie or Accept-Language)
     app.config['BABEL_DEFAULT_LOCALE'] = 'en'
-    app.config['BABEL_TRANSLATION_DIRECTORIES'] = 'translations'
+    # Compute absolute path to project-root translations/ directory
+    _factory_dir = os.path.dirname(os.path.abspath(__file__))  # .../interfaces/web/
+    _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(_factory_dir))))
+    app.config['BABEL_TRANSLATION_DIRECTORIES'] = os.path.join(_project_root, 'translations')
     try:
+        def _select_locale():
+            """v2.0 fix: Auto-detect locale from query param → cookie → Accept-Language header."""
+            lang = request.args.get('lang')
+            if lang and lang in ('en', 'zh'):
+                return lang
+            lang = request.cookies.get('lang')
+            if lang and lang in ('en', 'zh'):
+                return lang
+            best = request.accept_languages.best_match(['zh', 'en'])
+            return best or 'en'
+
         from flask_babel import Babel
-        babel = Babel(app)
-        babel.locale_selector_func = lambda: (
-            request.args.get('lang') or request.cookies.get('lang') or
-            request.accept_languages.best_match(['en', 'zh'])
-        )
+        babel = Babel(app, locale_selector=_select_locale)
+
+        # v2.0: After-request hook to set lang cookie based on detected locale
+        @app.after_request
+        def _set_lang_cookie(response):
+            # Only set if not already present and user hasn't explicitly set ?lang=
+            if not request.cookies.get('lang') and not request.args.get('lang'):
+                best = request.accept_languages.best_match(['zh', 'en'])
+                if best:
+                    response.set_cookie('lang', best, max_age=365*24*3600, samesite='Lax')
+            elif request.args.get('lang'):
+                # User explicitly chose a language — persist it
+                lang = request.args.get('lang')
+                if lang in ('en', 'zh'):
+                    response.set_cookie('lang', lang, max_age=365*24*3600, samesite='Lax')
+            return response
     except ImportError:
         pass  # Graceful: works without flask-babel installed
 
@@ -74,6 +100,10 @@ def create_app() -> Flask:
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(
         seconds=ConfigRegistry.get_raw_config().get("web_admin", {}).get("session_lifetime", 3600)
     )
+    # v1.9.6: 开发环境 HTTP 下不使用 Secure cookie，否则浏览器不发送 cookie
+    app.config['SESSION_COOKIE_SECURE'] = ConfigRegistry.get_raw_config().get("web_admin", {}).get("session_cookie_secure", False)
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
     # 初始化Session
     Session(app)
@@ -94,9 +124,19 @@ def create_app() -> Flask:
     app.logger.setLevel(logging.DEBUG)
     app.logger.propagate = False
 
-    # 禁用CSRF保护
+    # CSRF保护
     _csrf = CSRFProtect()
     _csrf.init_app(app)
+
+    # v2.0 fix: Return JSON for CSRF errors so frontend JS can handle them
+    @app.errorhandler(400)
+    def _csrf_error_json(e):
+        if request.path.startswith('/admin/'):
+            # Check if it's actually a CSRF error
+            desc = str(e)
+            if 'csrf' in desc.lower() or 'token' in desc.lower():
+                return jsonify({"error": "CSRF token expired. Please refresh the page.", "code": "csrf_expired"}), 400
+        return jsonify({"error": str(e), "code": "bad_request"}), 400
 
     # v1.7.9: V-005修复 — WSGI中间件级隐藏服务器指纹
     # Werkzeug开发服务器在Flask after_request之后才加Server头，必须在WSGI层拦截
@@ -117,26 +157,17 @@ def create_app() -> Flask:
         response.headers["Expires"] = "0"
         return response
 
-    # v1.9.0: 保护敏感静态文件 — 未登录用户无法访问 dashboard JS
-    @app.before_request
-    def protect_sensitive_static():
-        if request.path.startswith('/static/js/'):
-            if not session.get('authenticated'):
-                # Login page needs utils.js + sse-manager.js for CSRF
-                allowed = ['/static/js/utils.js', '/static/js/sse-manager.js']
-                if request.path not in allowed:
-                    return ('Not Found', 404, {})
-
     # 注册Blueprint
     from anteumbra.interfaces.web.blueprints import register_blueprints
     register_blueprints(app)
 
-    _app_instance = app
-    return app
-
+    # CSRF token for all templates (belt-and-suspenders: CSRFProtect also provides this)
     @app.context_processor
     def inject_csrf():
         return dict(csrf_token=generate_csrf)
+
+    _app_instance = app
+    return app
 
 
 def get_app() -> Flask:

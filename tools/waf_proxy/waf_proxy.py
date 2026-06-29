@@ -91,6 +91,10 @@ class WAFHandler(http.server.BaseHTTPRequestHandler):
             req = urllib.request.Request(url, data=body.encode() if body else None, method=method)
             for k, v in self.headers.items():
                 if k.lower() not in ("host", "content-length"): req.add_header(k, v)
+            # v2.0: 透传真实客户端 IP，避免后端日志全是 127.0.0.1
+            client_ip = self.client_address[0]
+            req.add_header("X-Forwarded-For", client_ip)
+            req.add_header("X-Real-IP", client_ip)
             resp = urllib.request.urlopen(req, timeout=30)
             self.send_response(resp.status)
             for k, v in resp.headers.items():

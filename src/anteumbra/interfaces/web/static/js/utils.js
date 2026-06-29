@@ -41,3 +41,4 @@ const TridentUtils = {
   }
 };
 window.TridentUtils = TridentUtils;
+window.AnteumbraUtils = TridentUtils;

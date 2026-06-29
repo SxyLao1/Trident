@@ -68,14 +68,19 @@ def load_scans_from_disk() -> list:
 # ── 文件查看器安全验证 ──────────────────────────────────
 
 def verify_file_in_registry(file_path: str) -> bool:
-    """验证文件路径是否在 Registry 中（白名单）"""
+    """验证文件路径是否在 Registry 中（白名单）。
+    v2.0 fix: Case-insensitive path comparison for Windows compatibility.
+    Registry stores paths lowercased (via path_to_key), but frontend sends
+    original-case paths from scanner findings.
+    """
     try:
         from anteumbra.infrastructure.suspicious_registry import get_all
-        raw_path = str(file_path).replace("\\", "/")
+        from anteumbra.infrastructure.utils.path_utils import path_to_key
+        raw_key = path_to_key(file_path)
         records = get_all()
         for r in records:
-            rp = str(r.get("file_path", "")).replace("\\", "/")
-            if rp == raw_path or rp.endswith("/" + raw_path):
+            rp = path_to_key(r.get("file_path", ""))
+            if rp == raw_key:
                 return True
         return False
     except Exception:

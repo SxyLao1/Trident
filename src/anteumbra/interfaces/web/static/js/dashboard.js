@@ -166,21 +166,32 @@ function loadDashboard() {
       }
       setTimeout(loadDashboardPanels, 50);
 
-      // v1.8.4: Auto-scroll live log stream to bottom + MutationObserver
-      setTimeout(function() {
+      // v2.0: Auto-scroll live log stream to bottom — robust multi-stage approach
+      function _anchorLogStream() {
         var logStream = document.getElementById('live-log-stream');
-        if (logStream) {
+        if (!logStream) return;
+        // Use requestAnimationFrame to ensure layout is complete
+        requestAnimationFrame(function() {
           logStream.scrollTop = logStream.scrollHeight;
-          // Observe new SSE lines and auto-scroll
-          if (window._logStreamObserver) { window._logStreamObserver.disconnect(); }
-            // Recreate observer every load (v2.0 fix)
+        });
+      }
+      // Stage 1: immediate scroll after innerHTML is set
+      _anchorLogStream();
+      // Stage 2: delayed scroll after any async-rendered content
+      setTimeout(_anchorLogStream, 100);
+      setTimeout(_anchorLogStream, 300);
+      // Stage 3: MutationObserver for ongoing SSE updates
+      if (window._logStreamObserver) { window._logStreamObserver.disconnect(); }
       window._logStreamObserver = new MutationObserver(function() {
-              logStream.scrollTop = logStream.scrollHeight;
-            });
-            window._logStreamObserver.observe(logStream, { childList: true, subtree: false });
-          }
+        var ls = document.getElementById('live-log-stream');
+        if (ls) { ls.scrollTop = ls.scrollHeight; }
+      });
+      setTimeout(function() {
+        var ls = document.getElementById('live-log-stream');
+        if (ls && window._logStreamObserver) {
+          window._logStreamObserver.observe(ls, { childList: true, subtree: false });
         }
-      }, 200);
+      }, 50);
 
     })
     .catch(function(err) {
@@ -307,26 +318,33 @@ function openLogAnalyzer() {
   m.style.visibility = 'visible';
   m.style.opacity = '1';
   m.classList.add('active');
+  // Copy current content as starting point, then reconnect SSE with all levels
   var s = document.getElementById('live-log-stream'), t = document.getElementById('analyzer-log-content');
   if (s && t) { t.innerHTML = s.innerHTML; t.scrollTop = t.scrollHeight; }
-  // Mirror live SSE into analyzer
-  if (!window._analyzerMirror) {
-    window._analyzerMirror = new MutationObserver(function() {
-      var src = document.getElementById('live-log-stream');
-      var dst = document.getElementById('analyzer-log-content');
-      var mod = document.getElementById('log-analyzer-modal');
-      if (src && dst && mod && mod.style.display !== 'none') {
-        dst.innerHTML = src.innerHTML; dst.scrollTop = dst.scrollHeight;
-      }
-    });
-    if (s) window._analyzerMirror.observe(s, {childList: true, subtree: true});
+  // v2.0: Reconnect SSE with ?levels=all for full log visibility
+  if (window.TridentSSEManager) {
+    TridentSSEManager.reconnectWithAllLevels();
   }
+  // Reset filter controls to defaults
+  var kw = document.getElementById('analyzer-filter-input');
+  var lv = document.getElementById('analyzer-level-filter');
+  var md = document.getElementById('analyzer-module-filter');
+  var tr = document.getElementById('analyzer-time-filter');
+  if (kw) kw.value = '';
+  if (lv) lv.value = 'all';
+  if (md) md.value = 'all';
+  if (tr) tr.value = 'all';
+  analyzerTimePreset();
 }
 
 function closeLogAnalyzer() {
   var m = document.getElementById('log-analyzer-modal'); if (!m) return;
   m.style.display = 'none'; m.style.visibility = 'hidden'; m.style.opacity = '0';
   m.classList.remove('active');
+  // v2.0: Reconnect SSE with normal (filtered) levels
+  if (window.TridentSSEManager) {
+    TridentSSEManager.reconnectNormal();
+  }
 }
 
 function analyzerTimePreset() {
@@ -392,6 +410,40 @@ function filterLogStream() {
   });
 }
 
+// v2.0: Client-side record table filtering (fixes search focus loss)
+function filterRecordsTable(input) {
+  var kw = (input.value || '').toLowerCase();
+  var containerId = input.dataset.container;
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  container.querySelectorAll('.record-item').forEach(function(el) {
+    var text = (el.dataset.path || '') + ' ' + (el.textContent || '');
+    el.style.display = (kw && text.toLowerCase().indexOf(kw) < 0) ? 'none' : '';
+  });
+}
+
+// v2.0: Client-side YARA rule filtering (fixes toolbar disappearing on search)
+function yaraClientFilter(input) {
+  var kw = (input.value || '').toLowerCase();
+  var container = document.getElementById('yara-rules-container');
+  if (!container) return;
+  container.querySelectorAll('.record-item').forEach(function(el) {
+    var text = (el.dataset.filename || '') + ' ' + (el.textContent || '');
+    el.style.display = (kw && text.toLowerCase().indexOf(kw) < 0) ? 'none' : '';
+  });
+}
+
+// v2.0: Client-side quarantine filtering (fixes search focus loss)
+function filterQuarantineTable(input) {
+  var kw = (input.value || '').toLowerCase();
+  var container = document.getElementById('quarantine-list-container');
+  if (!container) return;
+  container.querySelectorAll('.record-item').forEach(function(el) {
+    var text = (el.textContent || '');
+    el.style.display = (kw && text.toLowerCase().indexOf(kw) < 0) ? 'none' : '';
+  });
+}
+
 // v1.8.0: Moved from dashboard.html for consistency
 function closeRecordDetail() {
   var overlay = document.getElementById('record-detail-modal-overlay');
@@ -450,6 +502,20 @@ document.addEventListener('htmx:afterSettle', function(evt) {
   _restoreRecCheckboxes();
   _restoreQCheckboxes();
   if (document.getElementById('block-status-panel')) loadBlockStatus();
+});
+
+// v2.0 fix: Stats refresh triggered by batch quarantine/FP/delete operations
+document.addEventListener('anteumbra:statsRefresh', function() {
+  // Refresh Security Report panel on Overview page
+  var statsPanel = document.getElementById('overview-stats');
+  if (statsPanel && window.htmx) {
+    htmx.ajax('GET', '/admin/dashboard_content', {target: '#overview-stats', swap: 'innerHTML'});
+  }
+  // Also refresh Active Threats panel
+  var threatsPanel = document.getElementById('overview-active-threats');
+  if (threatsPanel && window.htmx) {
+    htmx.ajax('GET', '/admin/records?compact=1', {target: '#overview-active-threats', swap: 'innerHTML'});
+  }
 });
 
 

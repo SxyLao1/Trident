@@ -198,15 +198,19 @@ def scanner_cancel():
 @scanner_bp.route('/scanner/quarantine', methods=['POST'])
 @require_auth
 def scanner_quarantine():
-    """从扫描结果中一键隔离新发现文件"""
+    """从扫描结果中一键隔离新发现文件。
+    v2.0 fix: If file not found in Registry, auto-register it first.
+    Scanner auto-registers findings during scanning, but this handles edge cases
+    where the registry record was lost or the finding came from a saved scan.
+    """
     try:
         file_path = request.form.get('file_path', '')
         if not file_path:
             return jsonify({"error": "缺少 file_path 参数"}), 400
 
-        from anteumbra.infrastructure.suspicious_registry import get_all, mark_quarantined
+        from anteumbra.infrastructure.suspicious_registry import get_all, mark_quarantined, add as reg_add
         from anteumbra.infrastructure.quarantine import quarantine_file
-        from anteumbra.infrastructure.utils.path_utils import path_to_key
+        from anteumbra.infrastructure.utils.path_utils import path_to_key, normalize_path
 
         target = path_to_key(file_path)
         record = None
@@ -215,12 +219,30 @@ def scanner_quarantine():
                 record = r
                 break
 
+        # v2.0 fix: Auto-register scanner findings not yet in Registry
         if not record:
-            return jsonify({"error": "文件不在检测记录中"}), 404
-        if record.get("quarantine_id"):
+            actual_path = normalize_path(file_path)
+            if actual_path.exists():
+                try:
+                    reg_add(actual_path, ["scanner_manual_quarantine"],
+                            first_seen_ip="127.0.0.1", detection_source="active")
+                    current_app.logger.info(
+                        f"[SCANNER] 自动注册后隔离: {file_path}")
+                    # Re-read registry to get the new record
+                    for r in get_all(include_deleted=True):
+                        if r.get("file_path") == target:
+                            record = r
+                            break
+                except Exception as reg_err:
+                    current_app.logger.error(
+                        f"[SCANNER] 自动注册失败: {file_path} | {reg_err}")
+            if not record:
+                return jsonify({"error": "文件不在检测记录中且无法自动注册"}), 404
+
+        if record and record.get("quarantine_id"):
             return jsonify({"error": "文件已被隔离", "quarantine_id": record["quarantine_id"]}), 409
 
-        features = record.get("features", [])
+        features = record.get("features", []) if record else ["scanner_manual_quarantine"]
         rule_name = features[0] if features else "manual_scan_quarantine"
         result = quarantine_file(
             file_path=str(file_path),

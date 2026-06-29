@@ -350,8 +350,47 @@ class ScannerChain:
             except Exception as e:
                 self.logger.error(f"[SCAN][{engine.get_name()}] 失败: {e}", exc_info=True)
 
+        # v2.0: Also query PluginManager-registered Detectors (hybrid: built-in + plugins)
+        try:
+            result = self._scan_with_plugins(file_path)
+            if result is not None and result.is_suspicious:
+                return result
+        except Exception:
+            pass
+
         # 未命中，返回安全结果
         return ScanResult(file_path, False, [], engine="chain")
+
+    def _scan_with_plugins(self, file_path: Path) -> Optional[ScanResult]:
+        """v2.0: Query PluginManager-registered Detector plugins.
+
+        Creates a FileScannedEvent and dispatches it through PluginManager.
+        Detector plugins that implement the Detector interface and subscribe
+        to 'file_scan_request' events can return scan results.
+        """
+        try:
+            from anteumbra.application.plugin_manager import get_plugin_manager
+            pm = get_plugin_manager()
+            if not pm.is_enabled:
+                return None
+            results = pm.emit("file_scan_request", "scanner", {
+                "file_path": str(file_path),
+                "file_size": file_path.stat().st_size if file_path.exists() else 0,
+            })
+            # Check if any plugin returned a suspicious result
+            for event in results:
+                payload = event.payload if hasattr(event, 'payload') else {}
+                if payload.get("is_suspicious") and payload.get("features"):
+                    return ScanResult(
+                        file_path=file_path,
+                        is_suspicious=True,
+                        features=payload.get("features", []),
+                        score=payload.get("score", 0.8),
+                        engine=payload.get("engine", f"plugin:{event.source}"),
+                    )
+        except Exception:
+            pass
+        return None
 
 # 全局扫描器实例
 _scanner_chain: Optional[ScannerChain] = None

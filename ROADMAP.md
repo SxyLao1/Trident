@@ -1,26 +1,52 @@
 # Anteumbra Roadmap
 
-> **Current Version**: v2.0.0.dev0 (2026-06-28)  
-> **Vision**: Lightweight Web Perimeter Security — Passive Detection + Semi-Active Response  
-> **Status**: DDD architecture migrated, 79/79 tests passing
+> **Current Version**: v1.0.0.dev0 (2026-06-30)  
+> **Vision**: Web Perimeter Threat Intelligence — Passive Detection · Semi-Active Response · File-Level Forensics  
+> **Status**: DDD architecture migrated, 79/79 tests passing, frontend bugs fixed
 
 ---
 
-## v2.0.0 — Rename + Architecture Migration ✅ (Complete)
+## v1.0.0-dev — Anteumbra Reborn (Current)
+
+Anteumbra is a fresh start. Trident v1.9.5 is archived at `legacy-trident-v1.9.5` tag.
 
 | Milestone | Status |
 |-----------|--------|
-| Trident v1.9.5 → Anteumbra v2.0.0 | ✅ |
-| DDD four-layer architecture | ✅ |
-| `pip install anteumbra` package | ✅ |
-| SVG logo + professional README | ✅ |
-| 79/79 core tests passing | ✅ |
+| Trident v1.9.5 → Anteumbra rename | Done |
+| DDD four-layer architecture | Done |
+| `pip install anteumbra` package | Done |
+| Unified CLI (`anteumbra run|start|stop|status|config`) | Done |
+| Flask-Babel i18n (en/zh, auto-detect) | Done |
+| Registry format normalization (dict/list consistency) | Done |
+| Quarantine logging + status tracking | Done |
+| Batch operation CSRF + stats refresh | Done |
+| Audit Log status badges (FP/DEL/ALERT/ACTIVE) | Done |
+| Scanner cross-page selection + quarantine UX | Done |
+| Bilingual README (EN/ZH) | Done |
+| SVG logo + professional README | Done |
+| 79/79 core tests passing | Done |
 
-## v1.9.x — Architecture + Ecosystem (Trident) ✅
+### v1.0.0 Release Checklist
+
+| Item | Status |
+|------|--------|
+| Registry persistence stability (dict→list fix) | Done |
+| i18n translations path fix + lang cookie | Done |
+| Frontend batch ops JSON error handling | Done |
+| Quarantine → Active Threats removal | Done |
+| False Positive → Security Report update | Done |
+| Template `_()` i18n coverage (full pass) | Pending |
+| v1.9.0 plan: Block Ledger + Bidirectional Links + Broadcast | Pending |
+| End-to-end integration test suite | Pending |
+| PyPI first release | Pending |
+
+---
+
+## v1.9.x — Architecture + Ecosystem (Trident, Archived)
 
 See [Trident CHANGELOG](https://github.com/SxyLao1/Trident/blob/main/CHANGELOG.md) for v1.7.9–v1.9.5 details.
 
-**Key accomplishments (2026-06-28):**
+**Key accomplishments (2025–2026):**
 - Blueprint split (3767→2155 lines), JS modularization (1455→561)
 - SQLite backend (WAL mode) + DualWriteRepository
 - Plugin Manager + stdout_logger + 4 WAF adapters
@@ -29,7 +55,9 @@ See [Trident CHANGELOG](https://github.com/SxyLao1/Trident/blob/main/CHANGELOG.m
 - Gunicorn production config + Core test suite (79 tests)
 - Code quality fixes: SQL injection, thread safety, timezone handling
 
-## v2.1.0 — Multi-Site + Geo-IP (Planned)
+---
+
+## v1.1.0 — Multi-Site + Geo-IP (Planned)
 
 | Priority | Feature |
 |----------|---------|
@@ -40,7 +68,7 @@ See [Trident CHANGELOG](https://github.com/SxyLao1/Trident/blob/main/CHANGELOG.m
 | P2 | MISP / AbuseIPDB threat intelligence |
 | P3 | EventBus (asyncio) + Pydantic Schema migration |
 
-## v2.2.0 — Production Hardening
+## v1.2.0 — Production Hardening
 
 | Priority | Feature |
 |----------|---------|

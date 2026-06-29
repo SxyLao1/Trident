@@ -58,7 +58,28 @@ def _get_db_path() -> Path:
 
 
 def _load_db() -> List[Dict[str, Any]]:
-    """加载隔离记录数据库。如果文件丢失但磁盘有隔离文件，自动重建。"""
+    """加载隔离记录数据库。
+
+    v2.0: Repository-first loading. When storage.backend is sqlite or both,
+    reads from SQLite via Repository. Falls back to JSON when backend is json
+    or Repository is unavailable.
+    """
+    # v2.0: Try Repository first (SQLite primary)
+    try:
+        from anteumbra.infrastructure.config.registry import ConfigRegistry
+        config = ConfigRegistry.get_raw_config()
+        backend = config.get("storage", {}).get("backend", "json")
+        if backend != "json":
+            from anteumbra.infrastructure.persistence import get_repository
+            repo = get_repository("quarantine")
+            records = repo.list_all(limit=999999)
+            # v2.0 fix: SqliteRepository.list_all() always queries 'registry' table.
+            # Validate that records have quarantine-specific fields (quarantine_id or status).
+            if records and any(r.get("quarantine_id") or r.get("status") for r in records[:1]):
+                return records
+    except Exception:
+        pass
+
     db_path = _get_db_path()
     if db_path.exists():
         try:
@@ -103,6 +124,26 @@ def _load_db() -> List[Dict[str, Any]]:
     return recovered
 
 
+def _repo_shadow_save_quarantine(records: List[Dict[str, Any]]) -> None:
+    """v2.0: Shadow-write quarantine records to Repository interface.
+
+    Best-effort — failures are silently ignored so JSON persistence
+    (the primary store) is never impacted.
+    """
+    try:
+        from anteumbra.infrastructure.persistence import get_repository
+        repo = get_repository("quarantine")
+        for item in records:
+            key = item.get("quarantine_id", "")
+            if key:
+                try:
+                    repo.save(key, dict(item))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
 def _save_db(records: List[Dict[str, Any]]) -> None:
     """保存隔离记录数据库（v1.7.9: 原子写入 + 备份，防断电/并发损坏）"""
     db_path = _get_db_path()
@@ -130,6 +171,9 @@ def _save_db(records: List[Dict[str, Any]]) -> None:
         if db_path.exists():
             db_path.unlink()
         tmp_path.replace(db_path)
+
+    # v2.0: Shadow-write to Repository for storage.backend = sqlite / both
+    _repo_shadow_save_quarantine(records)
 
 
 # ============================================================================
@@ -161,7 +205,7 @@ def quarantine_file(
         src = normalize_path(file_path)
         if not src.exists():
             log_with_symbol("quarantine_skip", "WARNING",
-                            f"[QUARANTINE] 隔离源文件不存在，跳过: {file_path}")
+                            f"[QUARANTINE] Source file not found, skip: {file_path}")
             return None
 
         quarantine_dir = _get_quarantine_dir()
@@ -178,16 +222,21 @@ def quarantine_file(
         # 在移动前捕获文件大小（移动后 src 不存在会抛 FileNotFoundError）
         file_size = src.stat().st_size
 
+        # v2.0 fix: Quarantining日志，让用户知道操作正在进行
+        import logging as _logging
+        log_with_symbol("quarantine_add", "info",
+                        f"[QUARANTINE] Quarantining: {src.name} → {qid}", _logging.getLogger("monitor.quarantine"))
+
         # 移动文件（不是复制，原位置删除）
         try:
             shutil.move(str(src), str(quarantine_file))
         except FileNotFoundError:
             log_with_symbol("quarantine_skip", "WARNING",
-                            f"[QUARANTINE] 源文件在移动前已被删除: {src}")
+                            f"[QUARANTINE] Source file deleted before move: {src}")
             return None
         except PermissionError:
             log_with_symbol("quarantine_skip", "WARNING",
-                            f"[QUARANTINE] 权限不足，无法移动: {src}")
+                            f"[QUARANTINE] Permission denied, cannot move: {src}")
             return None
 
         # 记录元数据
@@ -208,7 +257,7 @@ def quarantine_file(
         _save_db(records)
 
         log_with_symbol("quarantine_add", "INFO",
-                        f"[QUARANTINE] 文件已隔离: {src.name} -> {qid}")
+                        f"[QUARANTINE] File quarantined: {src.name} -> {qid}")
 
         return record
 
@@ -235,7 +284,7 @@ def restore_file(quarantine_id: str) -> Dict[str, Any]:
             raise ValueError(f"隔离记录不存在: {quarantine_id}")
 
         if record["status"] != "quarantined":
-            raise ValueError(f"文件状态不是隔离中，无法恢复: {record['status']}")
+            raise ValueError(f"File not in quarantined status, cannot restore: {record['status']}")
 
         quarantine_path = normalize_path(record["quarantine_path"])
         original_path = normalize_path(record["original_path"])
@@ -255,7 +304,7 @@ def restore_file(quarantine_id: str) -> Dict[str, Any]:
         _save_db(records)
 
         log_with_symbol("quarantine_restore", "INFO",
-                        f"[QUARANTINE] 文件已恢复: {quarantine_id} -> {original_path}")
+                        f"[QUARANTINE] File restored: {quarantine_id} -> {original_path}")
 
         return record
 
@@ -290,7 +339,7 @@ def delete_quarantine(quarantine_id: str) -> None:
         _save_db(records)
 
         log_with_symbol("quarantine_delete", "INFO",
-                        f"[QUARANTINE] 文件已永久删除: {quarantine_id}")
+                        f"[QUARANTINE] File permanently deleted: {quarantine_id}")
 
 
 def is_recently_restored(file_path: str) -> bool:
@@ -340,12 +389,26 @@ def get_quarantine_detail(quarantine_id: str) -> Optional[Dict[str, Any]]:
 
 
 def get_quarantine_stats() -> Dict[str, int]:
-    """获取隔离统计数字"""
+    """获取隔离统计数字
+
+    v2.0 fix: Use .get() for defensive access. SqliteRepository.list_all()
+    may return records from the wrong table (registry vs quarantine), so
+    we validate the returned records have the expected structure.
+    """
     records = _load_db()
+    # v2.0 fix: detect wrong-table records and reload from JSON directly
+    if records and "status" not in records[0]:
+        db_path = _get_db_path()
+        if db_path.exists():
+            try:
+                with open(db_path, 'r', encoding='utf-8') as f:
+                    records = json.load(f)
+            except Exception:
+                records = []
     stats = {
         "total": len(records),
-        "quarantined": sum(1 for r in records if r["status"] == "quarantined"),
-        "restored": sum(1 for r in records if r["status"] == "restored"),
-        "deleted": sum(1 for r in records if r["status"] == "deleted"),
+        "quarantined": sum(1 for r in records if r.get("status") == "quarantined"),
+        "restored": sum(1 for r in records if r.get("status") == "restored"),
+        "deleted": sum(1 for r in records if r.get("status") == "deleted"),
     }
     return stats

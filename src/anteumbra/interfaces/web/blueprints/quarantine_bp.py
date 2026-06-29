@@ -183,16 +183,18 @@ def quarantine_batch():
                     else:
                         results["failed"] += 1
                 elif action == 'delete':
-                    if delete_quarantine(qid):
-                        results["success"] += 1
-                    else:
-                        results["failed"] += 1
+                    # v2.0 fix: delete_quarantine() returns None (void), always count success
+                    delete_quarantine(qid)
+                    results["success"] += 1
                 else:
                     return jsonify({"error": "unknown action"}), 400
             except Exception:
                 results["failed"] += 1
 
-        return jsonify(results)
+        # v2.0 fix: Trigger stats refresh in dashboard via HTMX header
+        resp = jsonify(results)
+        resp.headers['HX-Trigger'] = 'anteumbra:statsRefresh'
+        return resp
     except Exception as e:
         current_app.logger.error(f"[QUARANTINE][BATCH] error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500

@@ -509,13 +509,65 @@ class ThreatGraph:
             json.dump(data, f, ensure_ascii=False, indent=2)
         tmp.replace(self._persist_path)
 
-    def load(self):
-        """从持久化文件加载"""
-        if not self._persist_path or not self._persist_path.exists():
-            return
+        # v2.0: Shadow-write to Repository for storage.backend = sqlite / both
+        self._repo_shadow_persist(data)
+
+    def _repo_shadow_persist(self, data: dict):
+        """v2.0: Shadow-write threat profiles to Repository interface.
+
+        Best-effort — failures are silently ignored.
+        """
         try:
-            with open(self._persist_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            from anteumbra.infrastructure.persistence import get_repository
+            repo = get_repository("threat_profiles")
+            for pid, pd in data.get("profiles", {}).items():
+                try:
+                    repo.save(pid, dict(pd))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def load(self):
+        """从持久化文件加载。
+
+        v2.0: Repository-first loading. When storage.backend is sqlite or both,
+        reads profiles from SQLite via Repository. Falls back to JSON when
+        backend is json or Repository is unavailable.
+        """
+        # v2.0: Try Repository first (SQLite primary)
+        data = None
+        try:
+            from anteumbra.infrastructure.config.registry import ConfigRegistry
+            config = ConfigRegistry.get_raw_config()
+            backend = config.get("storage", {}).get("backend", "json")
+            if backend != "json":
+                from anteumbra.infrastructure.persistence import get_repository
+                repo = get_repository("threat_profiles")
+                profiles_list = repo.list_all(limit=999999)
+                if profiles_list:
+                    # Reconstruct profiles from flat dicts
+                    profiles_dict = {}
+                    for pd in profiles_list:
+                        pid = pd.get("profile_id", "")
+                        if pid:
+                            profiles_dict[pid] = pd
+                    data = {"profiles": profiles_dict, "ip_table": {}}
+        except Exception:
+            pass
+
+        # Fallback: load from JSON file
+        if data is None:
+            if not self._persist_path or not self._persist_path.exists():
+                return
+            try:
+                with open(self._persist_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except Exception:
+                return
+
+        # Reconstruct domain objects from data dict (shared logic)
+        try:
             for pid, pd in data.get("profiles", {}).items():
                 p = AttackerProfile(
                     profile_id=pid,

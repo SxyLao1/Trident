@@ -33,6 +33,24 @@ records_bp = Blueprint('records', __name__, url_prefix='/admin')
 
 # ── Helper ─────────────────────────────────────────────────
 
+def _deserialize_list(value):
+    """v2.0 fix: SQLite stores list fields as JSON strings.
+    Deserialize them back to Python lists so templates can iterate properly.
+    """
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return [str(value)] if value else []
+
+
 def _enhance_records(raw_records):
     """将 Registry 原始记录增强为前端可用的字典列表"""
     enhanced = []
@@ -47,7 +65,7 @@ def _enhance_records(raw_records):
             "marked_false_positive": r.get("marked_false_positive", False),
             "display_name": display_name,
             "detected_at": r.get("detected_at", "")[:16] if r.get("detected_at") else 'N/A',
-            "features": r.get("features", []),
+            "features": _deserialize_list(r.get("features")),
             "communication_count": r.get("communication_count", 0),
             "file_path": r.get("file_path", ""),
             "deleted_at": r.get("deleted_at", ""),
@@ -82,8 +100,8 @@ def get_records():
 
         all_records = get_all(include_deleted=audit_mode, include_false_positive=audit_mode)
 
-        if not audit_mode:
-            all_records = [r for r in all_records if not r.get("quarantine_id")]
+        # v2.0 fix: Always exclude quarantined items (they have their own Quarantine page)
+        all_records = [r for r in all_records if not r.get("quarantine_id")]
 
         total = len(all_records)
         total_pages = max(1, (total + per_page - 1) // per_page)
@@ -188,10 +206,11 @@ def records_batch():
                 except Exception:
                     results['failed'] += 1
         elif action == 'false_positive':
+            # v2.0 fix: Load registry once, not per file
+            registry = _load_registry()
             for fp in file_paths:
                 try:
                     target = path_to_key(fp)
-                    registry = _load_registry()
                     found = False
                     for item in registry:
                         if item.get('file_path') == target:
@@ -200,17 +219,19 @@ def records_batch():
                             found = True
                             break
                     if found:
-                        _save_registry(registry)
                         results['success'] += 1
                     else:
                         results['skipped'] += 1
                 except Exception:
                     results['failed'] += 1
+            if results['success'] > 0:
+                _save_registry(registry)
         elif action == 'delete':
+            # v2.0 fix: Load registry once, not per file
+            registry = _load_registry()
             for fp in file_paths:
                 try:
                     target = path_to_key(fp)
-                    registry = _load_registry()
                     found = False
                     for item in registry:
                         if item.get('file_path') == target:
@@ -219,15 +240,20 @@ def records_batch():
                             found = True
                             break
                     if found:
-                        _save_registry(registry)
                         results['success'] += 1
                     else:
                         results['skipped'] += 1
                 except Exception:
                     results['failed'] += 1
+            if results['success'] > 0:
+                _save_registry(registry)
         else:
             return jsonify({'error': 'unknown action'}), 400
-        return jsonify(results)
+
+        # v2.0 fix: Trigger stats refresh in dashboard via HTMX header
+        resp = jsonify(results)
+        resp.headers['HX-Trigger'] = 'anteumbra:statsRefresh'
+        return resp
     except Exception as e:
         current_app.logger.error(f'[RECORDS] batch error: {e}', exc_info=True)
         return jsonify({'error': str(e)}), 500

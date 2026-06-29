@@ -1,9 +1,18 @@
+
 msgid ""
 msgstr ""
 "Project-Id-Version: Anteumbra 2.0\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-06-30 01:20+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
 
 # Navigation
 msgid "Overview"
@@ -57,6 +66,9 @@ msgstr "文件聚类"
 msgid "SCAN CONFIG"
 msgstr "扫描配置"
 
+msgid "SCAN PROGRESS"
+msgstr "扫描进度"
+
 msgid "Target Directory"
 msgstr "目标目录"
 
@@ -75,21 +87,24 @@ msgstr "扫描结果"
 msgid "SCAN HISTORY"
 msgstr "扫描历史"
 
-# Records
-msgid "Search records..."
-msgstr "搜索记录..."
+msgid "Quarantine Selected"
+msgstr "隔离选中"
 
 msgid "Select All"
 msgstr "全选"
+
+msgid "Clear"
+msgstr "清除"
+
+# Records
+msgid "Search records..."
+msgstr "搜索记录..."
 
 msgid "Select All Across Pages"
 msgstr "跨页全选"
 
 msgid "Clear Selection"
 msgstr "清除选择"
-
-msgid "Quarantine Selected"
-msgstr "隔离选中"
 
 msgid "Mark FP"
 msgstr "标记误报"
@@ -122,9 +137,6 @@ msgstr "攻击链"
 
 msgid "Associated IPs"
 msgstr "关联 IP"
-
-msgid "File Clusters"
-msgstr "文件簇"
 
 msgid "Generate Report"
 msgstr "生成报告"
@@ -205,3 +217,25 @@ msgstr "存储"
 
 msgid "PLUGINS"
 msgstr "插件"
+
+msgid "Scan Total"
+msgstr "扫描总计"
+
+msgid "High Risk"
+msgstr "高危文件"
+
+msgid "Memory"
+msgstr "内存使用"
+
+msgid "Uptime"
+msgstr "运行时间"
+
+msgid "Unknown"
+msgstr "未知"
+
+msgid "Secure Login"
+msgstr "安全登录"
+
+msgid "AUTHENTICATE"
+msgstr "验证"
+

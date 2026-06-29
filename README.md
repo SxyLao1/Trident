@@ -4,19 +4,23 @@
 
 # Anteumbra
 
-<img src="https://img.shields.io/badge/version-2.0.0.dev0-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.0.dev0-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.8%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
 <img src="https://img.shields.io/badge/tests-79%2F79-brightgreen?style=flat-square" alt="Tests">
 
-**Lightweight Web Perimeter Security** — Passive Detection · Semi-Active Response
+**Lightweight Web Perimeter Security** — Passive Detection · Semi-Active Response · File-Level Forensics
+
+> *"Anteumbra is an annular eclipse observatory at the web perimeter. Every ray that tries to pierce the boundary is recorded, measured, and traced back to its source. Disguised threats reveal themselves in their own blazing intensity."*
+
+[中文文档](README_zh.md) | [PyPI](https://pypi.org/project/anteumbra/) | [Issues](https://github.com/SxyLao1/Anteumbra/issues)
 
 </div>
 
 ---
 
-Anteumbra (formerly Trident) is a production-grade WebShell detection system for Linux and Windows. It monitors file system changes in real time, detects WebShells using an embedded YARA rule engine, and provides a web-based management dashboard.
+Anteumbra (formerly Trident) is a production-grade **web perimeter threat intelligence** system for Linux and Windows. It monitors file system changes in real time, detects WebShells using an embedded YARA rule engine, profiles attacker behavior, and provides a web-based management dashboard — all without inline blocking. Think of it as a **security observatory** at the boundary layer.
 
 Key capabilities:
 
@@ -62,7 +66,7 @@ cd Anteumbra
 .\run_tests.bat
 ```
 
-Then open `http://127.0.0.1:8080`. Default username is `admin`; password is printed in the console during first setup.
+Then open `http://127.0.0.1:5000/admin`. Default username is `admin`; password is printed in the console during first setup.
 
 ## Architecture
 
@@ -98,14 +102,20 @@ Anteumbra is designed to complement these excellent open-source tools:
 Anteumbra is the successor to [Trident](https://github.com/SxyLao1/Trident) (v1.9.5). If you were using Trident:
 
 ```bash
-# Uninstall old package
-pip uninstall trident-webshell
+# 1. Uninstall Trident (script-based project, not a pip package)
+cd Trident_v1.0/Trident_1.8
+.\uninstall.bat      # Windows
+# bash uninstall.sh  # Linux
 
-# Install Anteumbra
+# 2. Install Anteumbra
 pip install anteumbra
 
-# Your config.toml and data/ directory are compatible
+# 3. Copy your config and data
+cp /path/to/Trident/config.toml /path/to/Anteumbra/
+cp -r /path/to/Trident/data/ /path/to/Anteumbra/
 ```
+
+Your `config.toml` and `data/` directory are compatible.
 
 ## License
 
@@ -116,5 +126,5 @@ Third-party tools bundled in `tools/` retain their original licenses.
 ---
 
 <div align="center">
-  <sub>Anteumbra v2.0 — MIT License</sub>
+  <sub>Anteumbra v1.0 — MIT License</sub>
 </div>

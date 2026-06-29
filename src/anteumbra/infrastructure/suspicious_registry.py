@@ -377,20 +377,92 @@ def _flush_sync():
         _get_logger().error(f"[REGISTRY][ASYNC] 同步刷新失败: {e}", exc_info=True)
 
 
+def _repo_load_registry() -> Optional[List[Dict]]:
+    """v2.0: Try to load registry records from Repository (SQLite).
+
+    Returns None if Repository is not available, doesn't have the backend
+    configured for SQLite, or loading fails.
+    """
+    try:
+        from anteumbra.infrastructure.persistence import get_repository
+        from anteumbra.infrastructure.config.registry import ConfigRegistry
+        config = ConfigRegistry.get_raw_config()
+        backend = config.get("storage", {}).get("backend", "json")
+        if backend == "json":
+            return None  # JSON-only mode, don't read from Repository
+        repo = get_repository("registry")
+        records = repo.list_all(limit=999999)
+        if records:
+            # v2.0 fix: SQLite stores list/dict fields as JSON strings.
+            # Deserialize them back so downstream code gets proper Python lists.
+            for r in records:
+                for field in ("features",):
+                    val = r.get(field)
+                    if isinstance(val, str):
+                        try:
+                            parsed = json.loads(val)
+                            if isinstance(parsed, list):
+                                r[field] = parsed
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+            logger = logging.getLogger("monitor.suspicious_registry")
+            logger.info(f"[REGISTRY] 从 Repository 加载 {len(records)} 条记录 (backend={backend})")
+            return records
+    except Exception:
+        pass
+    return None
+
+
+def _normalize_registry_format(data) -> List[Dict]:
+    """v2.0 fix: Normalize registry to always be a list of dicts.
+
+    The JSON file may store records as either:
+    - A list: [{"file_path": "...", ...}, ...]
+    - A dict: {"path/key": {"file_path": "...", ...}, ...}
+
+    All internal code expects a list, so normalize dict format to list.
+    """
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        # Convert dict-of-dicts to list, ensuring file_path is set from key if missing
+        result = []
+        for key, item in data.items():
+            if isinstance(item, dict):
+                if "file_path" not in item:
+                    item["file_path"] = key
+                result.append(item)
+        return result
+    return []
+
+
 def _load_registry() -> List[Dict]:
-    """加载注册表（确保路径已初始化）。v1.7.9: 优先返回内存快照，避免异步保存导致的读写不一致。"""
+    """加载注册表（确保路径已初始化）。
+
+    v2.0: Repository-first loading. When storage.backend is sqlite or both,
+    reads from SQLite via Repository. Falls back to JSON if Repository is
+    unavailable. When backend is json, reads from JSON directly (unchanged).
+
+    v2.0 fix: Always returns a list of dicts, normalizing dict-format JSON files.
+    """
     _init_paths()
 
     # v1.7.9: 优先使用内存快照（避免异步保存未刷盘时读到旧数据）
     global _last_registry_snapshot
     if _last_registry_snapshot is not None:
-        return _last_registry_snapshot
+        return _normalize_registry_format(_last_registry_snapshot)
+
+    # v2.0: Try Repository first (SQLite primary)
+    repo_data = _repo_load_registry()
+    if repo_data is not None:
+        return _normalize_registry_format(repo_data)
 
     if _REGISTRY_PATH and _REGISTRY_PATH.exists():
         try:
             content = _REGISTRY_PATH.read_text(encoding='utf-8')
             if content.strip():
                 data = json.loads(content)
+                data = _normalize_registry_format(data)
                 logger = logging.getLogger("monitor.suspicious_registry")
                 logger.debug(f"[REGISTRY] 加载主文件成功: {len(data)} 条记录")
                 return data
@@ -402,8 +474,10 @@ def _load_registry() -> List[Dict]:
             content = _REGISTRY_BACKUP_PATH.read_text(encoding='utf-8')
             if content.strip():
                 data = json.loads(content)
+                data = _normalize_registry_format(data)
                 try:
-                    _REGISTRY_PATH.write_text(json.dumps(data, indent=2), encoding='utf-8')
+                    # Always write as list format going forward
+                    _REGISTRY_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
                     _logger_info("[REGISTRY] 已从备份恢复主文件")
                 except:
                     _logger_warning("[REGISTRY] 无法恢复主文件，继续使用备份")
@@ -412,6 +486,28 @@ def _load_registry() -> List[Dict]:
             _logger_warning("[REGISTRY] 备份文件也损坏")
 
     return []
+
+
+def _repo_shadow_save(data: List[Dict]):
+    """v2.0: Shadow-write registry records to Repository interface.
+
+    This is a best-effort operation — failures are silently ignored
+    to ensure JSON persistence (the primary store) is never impacted.
+    When storage.backend = 'sqlite' or 'both', this ensures data
+    flows to SQLite without changing the module's public API.
+    """
+    try:
+        from anteumbra.infrastructure.persistence import get_repository
+        repo = get_repository("registry")
+        for item in data:
+            key = item.get("file_path", "")
+            if key:
+                try:
+                    repo.save(key, dict(item))
+                except Exception:
+                    pass
+    except Exception:
+        pass  # Repository not available or write failed — non-critical
 
 
 def _save_registry_sync(data: List[Dict]):
@@ -495,6 +591,9 @@ def _save_registry_sync(data: List[Dict]):
                 logger.critical(f"[REGISTRY][FALLBACK] 已写入紧急备份: {fallback_path}")
             except:
                 pass
+
+    # v2.0: Shadow-write to Repository for storage.backend = sqlite / both
+    _repo_shadow_save(data)
 
 def _save_registry(data: List[Dict]):
     """保存注册表（根据配置自动选择同步或异步）"""

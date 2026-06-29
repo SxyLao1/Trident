@@ -1,12 +1,12 @@
 <!-- v1.9.0: Active Manual Scanner -->
 <div style="display: flex; flex-direction: column; gap: 16px; padding: 16px;">
   <h3 style="color: #00ff41; font-family: var(--font-mono); margin: 0; font-size: 15px;">
-    ◎ MANUAL SCANNER — Proactive WebShell Detection
+    ◎ {{ _('Scanner') }} — Proactive WebShell Detection
   </h3>
 
   <!-- Scan Configuration -->
   <div class="card" id="scan-config-card" style="display: flex; flex-direction: column;">
-    <div class="card-header"><span class="card-header-icon">◆</span> SCAN CONFIGURATION</div>
+    <div class="card-header"><span class="card-header-icon">◆</span> {{ _('SCAN CONFIG') }}</div>
     <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
         <div>
@@ -37,7 +37,7 @@
   <!-- Progress Card (hidden until scan starts) -->
   <div class="card" id="scan-progress-card" style="display: none; flex-direction: column;">
     <div class="card-header">
-      <span><span class="card-header-icon">↻</span> SCAN PROGRESS</span>
+      <span><span class="card-header-icon">↻</span> {{ _('SCAN PROGRESS') }}</span>
       <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="stopScan()">Stop</button>
     </div>
     <div class="card-body" style="padding: 16px;">
@@ -75,14 +75,19 @@
   <!-- Results Card (hidden until findings exist) -->
   <div class="card" id="scan-results-card" style="display: none; flex-direction: column; max-height: 50vh;">
     <div class="card-header" style="display: flex; align-items: center; gap: 12px;">
-      <span><span class="card-header-icon">◆</span> SCAN RESULTS</span>
-      <span style="flex: 1;"></span>
+      <span><span class="card-header-icon">◆</span> {{ _('SCAN RESULTS') }}</span>
       <button class="btn btn-ghost btn-sm" id="tab-new" style="font-size:10px; color:#00ff41; border-bottom:2px solid #00ff41;"
               onclick="switchResultsTab('new')">New (<span id="tab-new-count">0</span>)</button>
       <button class="btn btn-ghost btn-sm" id="tab-known" style="font-size:10px;"
               onclick="switchResultsTab('known')">Known (<span id="tab-known-count">0</span>)</button>
       <button class="btn btn-ghost btn-sm" id="tab-all" style="font-size:10px;"
               onclick="switchResultsTab('all')">All (<span id="tab-all-count">0</span>)</button>
+      <span style="flex: 1;"></span>
+      <span id="scan-selected-count" style="font-size:10px;color:#888;display:none;">0 selected</span>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="scanSelectAll()">Select All</button>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="scanClearSel()">Clear</button>
+      <button class="btn btn-danger btn-sm" style="font-size:10px;" id="scan-quarantine-sel-btn" disabled
+              onclick="scanQuarantineSelected()">Quarantine Selected</button>
       <button class="btn btn-primary btn-sm" id="scan-report-btn" style="font-size:10px; display:none;"
               onclick="generateReport()">Generate Report</button>
     </div>
@@ -90,11 +95,12 @@
       <table style="width: 100%; font-size: 11px; border-collapse: collapse;" id="results-table">
         <thead>
           <tr style="border-bottom: 1px solid #1a1a1a; color: #888; font-size: 10px; position: sticky; top: 0; background: #0a0a0a;">
+            <th style="padding: 6px 10px; text-align: left; width:20px;"><input type="checkbox" onchange="scanToggleAll(this)" id="scan-select-all-cb"></th>
             <th style="padding: 6px 10px; text-align: left;">File</th>
             <th style="padding: 6px 10px; text-align: left;">Path</th>
             <th style="padding: 6px 10px; text-align: left;">Engine</th>
             <th style="padding: 6px 10px; text-align: left;">Features</th>
-            <th style="padding: 6px 10px; text-align: center;">Status</th>
+            <th style="padding: 6px 10px; text-align: center;">Quarantine</th>
             <th style="padding: 6px 10px; text-align: right;">Actions</th>
           </tr>
         </thead>
@@ -106,7 +112,7 @@
   <!-- Scan History -->
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header" style="display: flex; align-items: center; gap: 12px;">
-      <span><span class="card-header-icon">↻</span> SCAN HISTORY</span>
+      <span><span class="card-header-icon">↻</span> {{ _('SCAN HISTORY') }}</span>
       <span style="flex:1;"></span>
       <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="loadScanHistory()">↻ Refresh</button>
     </div>

@@ -5,22 +5,22 @@
     <button class="threats-tab active" data-tab="active"
             style="background: none; border: none; color: #00ff41; font-family: var(--font-mono); font-size: 13px; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid #00ff41;"
             onclick="switchThreatsTab('active')">
-      ACTIVE THREATS
+      {{ _('Active Threats') }}
     </button>
     <button class="threats-tab" data-tab="quarantine"
             style="background: none; border: none; color: #666; font-family: var(--font-mono); font-size: 13px; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent;"
             onclick="switchThreatsTab('quarantine')">
-      QUARANTINE
+      {{ _('Quarantine') }}
     </button>
     <button class="threats-tab" data-tab="audit"
             style="background: none; border: none; color: #666; font-family: var(--font-mono); font-size: 13px; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent;"
             onclick="switchThreatsTab('audit')">
-      AUDIT LOG
+      {{ _('Audit Log') }}
     </button>
     <button class="threats-tab" data-tab="clusters"
             style="background: none; border: none; color: #666; font-family: var(--font-mono); font-size: 13px; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent;"
             onclick="switchThreatsTab('clusters')">
-      CLUSTERS
+      {{ _('File Clusters') }}
     </button>
   </div>
 
