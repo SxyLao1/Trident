@@ -5,8 +5,8 @@ release_date = "TBD"
 project_root = "."
 
 [website]
-name = "Website-PhpStudy"
-path = "E:/Software/phpstudy_pro/WWW"
+name = "Default Website"
+path = "/var/www/html"
 port = 80
 enabled = true
 
@@ -431,7 +431,7 @@ scan_timeout = 30
 # 原有配置（保持不变）
 # ============================================================================
 [website.log_config]
-access_log_path = "E:/Software/phpstudy_pro/Extensions/Nginx1.25.2/logs/access.log"
+access_log_path = "/var/log/nginx/access.log"
 filter_internal_ip = false
 log_monitor_enabled = true
 

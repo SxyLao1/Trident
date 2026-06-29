@@ -78,7 +78,7 @@ src/anteumbra/
 └── interfaces/           # Interfaces: Flask blueprints, templates, static assets
 ```
 
-Architecture Decision Records (ADRs) are documented in `PROJECT_MASTER_Trident-Anteumbra.md`.
+Architecture follows Domain-Driven Design with four separated layers.
 
 ## Ecosystem & Related Projects
 
@@ -102,8 +102,8 @@ Anteumbra is designed to complement these excellent open-source tools:
 Anteumbra is the successor to [Trident](https://github.com/SxyLao1/Trident) (v1.9.5). If you were using Trident:
 
 ```bash
-# 1. Uninstall Trident (script-based project, not a pip package)
-cd Trident_v1.0/Trident_1.8
+# 1. Uninstall Trident
+cd Trident
 .\uninstall.bat      # Windows
 # bash uninstall.sh  # Linux
 

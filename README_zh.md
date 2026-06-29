@@ -78,7 +78,7 @@ src/anteumbra/
 └── interfaces/           # 接口层：Flask 蓝图、模板、静态资源
 ```
 
-架构决策记录 (ADR) 见 `PROJECT_MASTER_Trident-Anteumbra.md`。
+架构采用领域驱动设计，四层分离。
 
 ## 生态与相关项目
 
@@ -102,8 +102,8 @@ Anteumbra 与以下优秀开源工具互补：
 Anteumbra 是 [Trident](https://github.com/SxyLao1/Trident) (v1.9.5) 的继任者。如果你正在使用 Trident：
 
 ```bash
-# 1. 卸载 Trident（脚本项目，非 pip 包）
-cd Trident_v1.0/Trident_1.8
+# 1. 卸载 Trident
+cd Trident
 .\uninstall.bat      # Windows
 # bash uninstall.sh  # Linux
 
