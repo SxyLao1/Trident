@@ -674,6 +674,20 @@ def add(file_path: Path, features: List[str], first_seen_ip: str = None, detecti
             except Exception as e:
                 _get_logger().warning(f"[REGISTRY] SSE推送失败: {e}")
 
+            # v2.0: Emit event for PluginManager handlers
+            try:
+                from anteumbra.application.plugin_manager import get_plugin_manager
+                pm = get_plugin_manager()
+                if pm.is_enabled:
+                    pm.emit("record_added", "suspicious_registry", {
+                        "file_path": abs_path,
+                        "features": features,
+                        "first_seen_ip": first_seen_ip,
+                        "detection_source": detection_source,
+                    })
+            except Exception:
+                pass
+
             log_with_symbol("registry_add", "info", f"{file_path.name} | 特征: {', '.join(features[:3])}")
 
     except Exception as e:
@@ -716,6 +730,18 @@ def mark_alerted(file_path: Path):
                 item["alerted"] = True
                 _save_registry(registry)
                 log_with_symbol("notice", "debug", f"标记已告警: {file_path.name}")
+
+                # v2.0: Emit event for PluginManager handlers
+                try:
+                    from anteumbra.application.plugin_manager import get_plugin_manager
+                    pm = get_plugin_manager()
+                    if pm.is_enabled:
+                        pm.emit("registry_changed", "suspicious_registry", {
+                            "operation": "mark_alerted",
+                            "file_path": abs_path,
+                        })
+                except Exception:
+                    pass
                 break
     except Exception as e:
         log_with_symbol("error_mark_alerted", "error", f"异常: {e}")
@@ -734,9 +760,74 @@ def mark_quarantined(file_path: str, quarantine_id: str):
                 _save_registry_sync(registry)  # 必须同步写入，否则会被紧跟的DELETE事件覆盖
                 log_with_symbol("quarantine_add", "info",
                                 f"Registry 已标记隔离: {Path(file_path).name} -> {quarantine_id}")
+
+                # v2.0: Emit event for PluginManager handlers
+                try:
+                    from anteumbra.application.plugin_manager import get_plugin_manager
+                    pm = get_plugin_manager()
+                    if pm.is_enabled:
+                        pm.emit("registry_changed", "suspicious_registry", {
+                            "operation": "mark_quarantined",
+                            "file_path": abs_path,
+                            "quarantine_id": quarantine_id,
+                        })
+                except Exception:
+                    pass
                 break
     except Exception as e:
         log_with_symbol("error_registry_save", "error", f"标记隔离失败: {e}")
+
+
+def mark_false_positive(file_path: Union[Path, str], reason: str = "") -> bool:
+    """v2.0: 标记记录为误报 — 在 Registry 中设置 marked_false_positive=True
+
+    与 remove() 区分：此操作由用户手动触发（前端按钮），不是文件删除事件。
+    标记后记录默认隐藏，但可通过 include_false_positive=True 查看。
+    """
+    _ensure_initialized()
+    logger = logging.getLogger("monitor.suspicious_registry")
+
+    if isinstance(file_path, Path):
+        abs_path = path_to_key(file_path)
+    else:
+        abs_path = file_path
+
+    try:
+        registry = _load_registry()
+        found = False
+        for item in registry:
+            if item.get("file_path") == abs_path:
+                item["marked_false_positive"] = True
+                item["false_positive_at"] = datetime.now().isoformat()
+                item["false_positive_reason"] = reason
+                found = True
+                break
+
+        if not found:
+            logger.warning(f"[REGISTRY][FALSE_POSITIVE] 记录不存在: {abs_path[:50]}...")
+            return False
+
+        _save_registry(registry)
+
+        # v2.0: Emit event for PluginManager handlers
+        try:
+            from anteumbra.application.plugin_manager import get_plugin_manager
+            pm = get_plugin_manager()
+            if pm.is_enabled:
+                pm.emit("registry_changed", "suspicious_registry", {
+                    "operation": "mark_false_positive",
+                    "file_path": abs_path,
+                    "reason": reason,
+                })
+        except Exception:
+            pass
+
+        logger.info(f"[REGISTRY][FALSE_POSITIVE] 已标记误报: {abs_path}")
+        return True
+
+    except Exception as e:
+        logger.error(f"[REGISTRY][FALSE_POSITIVE] 标记失败: {e}", exc_info=True)
+        return False
 
 
 def increment_access(file_path: Path, ip: str):
@@ -785,6 +876,19 @@ def increment_access(file_path: Path, ip: str):
         # - 高频访问时，只会每2秒推送一次
         # - 最后一次更新后2秒，前端最终状态一定正确
         trigger_registry_update_debounced()
+
+        # v2.0: Emit event for PluginManager handlers
+        try:
+            from anteumbra.application.plugin_manager import get_plugin_manager
+            pm = get_plugin_manager()
+            if pm.is_enabled:
+                pm.emit("registry_changed", "suspicious_registry", {
+                    "operation": "increment_access",
+                    "file_path": abs_path,
+                    "ip": ip,
+                })
+        except Exception:
+            pass
 
     except Exception as e:
         log_with_symbol("error_increment", "error", f"异常: {e}", _get_logger())
@@ -839,6 +943,18 @@ def remove(file_path: Union[Path, str]) -> bool:
             logger.debug("[REGISTRY] SSE防抖推送已触发")
         except Exception as e:
             logger.warning(f"[REGISTRY] SSE推送失败: {e}")
+
+        # v2.0: Emit event for PluginManager handlers
+        try:
+            from anteumbra.application.plugin_manager import get_plugin_manager
+            pm = get_plugin_manager()
+            if pm.is_enabled:
+                pm.emit("registry_changed", "suspicious_registry", {
+                    "operation": "remove",
+                    "file_path": abs_path,
+                })
+        except Exception:
+            pass
 
         return True
 

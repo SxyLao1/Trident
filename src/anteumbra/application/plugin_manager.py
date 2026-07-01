@@ -44,6 +44,8 @@ class PluginManager:
         self._config: Dict[str, Any] = {}
         self._dispatch_timeout = 30.0  # Max seconds per plugin on_event
         self._event_queue: queue.Queue = queue.Queue()  # Fire-and-Forget event queue
+        self._worker_running: bool = False
+        self._worker_thread: Optional[threading.Thread] = None
 
     @classmethod
     def get_instance(cls) -> "PluginManager":
@@ -76,6 +78,38 @@ class PluginManager:
             len(self._plugins), len(self._detectors),
             len(self._notifiers), len(self._event_sources),
         )
+
+        # Start the Fire-and-Forget event worker
+        self._start_worker()
+
+    # ── Worker Thread ──────────────────────────────────
+
+    def _start_worker(self) -> None:
+        """Start the background worker that dispatches emit()-queued events."""
+        if self._worker_running:
+            return
+        self._worker_running = True
+        self._worker_thread = threading.Thread(
+            target=self._event_worker,
+            name="PluginManager-EmitWorker",
+            daemon=True,
+        )
+        self._worker_thread.start()
+        logger.info("PluginManager: emit worker thread started")
+
+    def _event_worker(self) -> None:
+        """Background worker: consume emit queue and dispatch to handlers."""
+        while self._worker_running:
+            try:
+                event = self._event_queue.get(timeout=1.0)
+            except queue.Empty:
+                continue
+            if event is None:
+                break  # Shutdown signal
+            try:
+                self.dispatch(event)
+            except Exception as e:
+                logger.error("PluginManager: emit worker dispatch error: %s", e, exc_info=True)
 
     # ── 注册 / 卸载 ────────────────────────────────────
 
@@ -195,6 +229,14 @@ class PluginManager:
 
     def shutdown(self) -> None:
         """停用所有插件（线程安全）"""
+        # Stop the emit worker thread first
+        if self._worker_running:
+            self._worker_running = False
+            self._event_queue.put(None)  # Wake up worker
+            if self._worker_thread and self._worker_thread.is_alive():
+                self._worker_thread.join(timeout=3.0)
+            logger.info("PluginManager: emit worker thread stopped")
+
         with self._rwlock:
             names = list(self._plugins.keys())
         for name in names:

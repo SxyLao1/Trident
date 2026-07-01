@@ -19,7 +19,7 @@ from flask import (
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.infrastructure.suspicious_registry import get_all, remove as registry_remove, mark_quarantined, \
-    _load_registry, _save_registry, _clear_memory_cache
+    mark_false_positive, _load_registry, _save_registry, _clear_memory_cache
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 from anteumbra.infrastructure.utils.sse_manager import trigger_registry_update
 from anteumbra.interfaces.web.blueprints._shared import (
@@ -400,26 +400,16 @@ def remove_file(file_path):
 
 @records_bp.route('/mark_false_positive/<path:file_path>', methods=['POST'])
 @require_auth
-def mark_false_positive(file_path):
-    """标记为误报"""
+def mark_false_positive_route(file_path):
+    """标记为误报 — v2.0: 委托给 centralized suspicious_registry.mark_false_positive()"""
     try:
         decoded_path = unquote(file_path)
         normalized_path = normalize_path(decoded_path)
-        target_key = path_to_key(normalized_path)
 
-        registry = _load_registry()
-        found = False
-        for item in registry:
-            if item.get("file_path") == target_key:
-                item["marked_false_positive"] = True
-                item["false_positive_at"] = _dt.now().isoformat()
-                found = True
-                break
-
-        if not found:
+        ok = mark_false_positive(normalized_path)
+        if not ok:
             return jsonify({"status": "error", "message": "记录不存在"}), 404
 
-        _save_registry(registry)
         trigger_registry_update()
 
         filtered_records = get_all(include_deleted=False, include_false_positive=False)

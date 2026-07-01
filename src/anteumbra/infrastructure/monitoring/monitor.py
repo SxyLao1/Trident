@@ -625,32 +625,9 @@ class FileMonitorHandler(FileSystemEventHandler):
                     self.notifier._safe_notify(format_alert_message(ctx), level="CRITICAL")
 
                     # Step 1: 注册到Registry（从scanner移至此，确保不遗漏），传入IP
+                    # v2.0: add() now emits record_added internally — threat_graph_handler
+                    # handles ThreatGraph ingestion via the event bus.
                     add(event_path, scan_result.features, first_seen_ip=first_seen_ip, detection_source="passive")
-
-                    # v2.0: Emit RecordAddedEvent to PluginManager
-                    try:
-                        pm = get_plugin_manager()
-                        if pm.is_enabled:
-                            pm.emit("record_added", "monitor", {
-                                "file_path": str(event_path),
-                                "features": scan_result.features,
-                                "first_seen_ip": first_seen_ip,
-                                "detection_source": "passive",
-                            })
-                    except Exception:
-                        pass
-
-                    # v1.8.1: 喂给画像引擎（日志无IP时用127.0.0.1）
-                    try:
-                        from anteumbra.infrastructure.threat_graph import get_threat_graph
-                        get_threat_graph().ingest_registry_entry({
-                            "file_path": str(event_path),
-                            "features": scan_result.features,
-                            "detected_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                            "first_seen_ip": first_seen_ip,
-                        })
-                    except Exception:
-                        pass
 
                     # Step 2: 检查隔离总开关
                     quarantine_enabled = True
@@ -679,17 +656,6 @@ class FileMonitorHandler(FileSystemEventHandler):
                             quarantined = True
                             log_with_symbol("quarantine_add", "info",
                                             f"[QUARANTINE] 已隔离: {event_path.name} -> {result['quarantine_id']}", self.logger)
-                            # v2.0: Emit FileQuarantinedEvent to PluginManager
-                            try:
-                                pm = get_plugin_manager()
-                                if pm.is_enabled:
-                                    pm.emit("file_quarantined", "monitor", {
-                                        "file_path": str(event_path),
-                                        "quarantine_id": result["quarantine_id"],
-                                        "rule_name": rule_name,
-                                    })
-                            except Exception:
-                                pass
                         else:
                             self.logger.warning(f"[QUARANTINE] 隔离跳过: {event_path.name} (文件不存在)")
                 except Exception as qe:
@@ -907,19 +873,8 @@ class FileMonitorHandler(FileSystemEventHandler):
                         if result and result.is_suspicious:
                             log_with_symbol("scan_hit", "critical",
                                             f"{dest_path.name} | 引擎: {result.engine}", self.logger)
-                            # 注册
+                            # 注册 — v2.0: add() emits record_added, threat_graph_handler follows
                             add(dest_path, result.features, first_seen_ip="127.0.0.1")
-                            # v1.8.1: 画像引擎
-                            try:
-                                from anteumbra.infrastructure.threat_graph import get_threat_graph
-                                get_threat_graph().ingest_registry_entry({
-                                    "file_path": str(dest_path),
-                                    "features": result.features,
-                                    "detected_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                                    "first_seen_ip": "127.0.0.1",
-                                })
-                            except Exception:
-                                pass
                             # 隔离
                             qr = quarantine_file(str(dest_path), result.features[0] if result.features else "unknown", result.features, str(dest_path))
                             if qr:

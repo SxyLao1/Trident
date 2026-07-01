@@ -27,7 +27,7 @@ from datetime import datetime
 PASS = 0
 FAIL = 0
 
-def test(name, fn):
+def run_test(name, fn):
     global PASS, FAIL
     try:
         fn()
@@ -122,11 +122,11 @@ def test_imports():
 if __name__ == "__main__":
     print("Anteumbra E2E Test Suite")
     print("=" * 50)
-    test("Config loads", test_config)
-    test("Flask health", test_flask)
-    test("WAF proxy blocks", test_waf_proxy)
-    test("YARA engine", test_file_detection)
-    test("Core imports", test_imports)
+    run_test("Config loads", test_config)
+    run_test("Flask health", test_flask)
+    run_test("WAF proxy blocks", test_waf_proxy)
+    run_test("YARA engine", test_file_detection)
+    run_test("Core imports", test_imports)
     print("=" * 50)
     print(f"Results: {PASS} passed, {FAIL} failed")
     sys.exit(0 if FAIL == 0 else 1)

@@ -36,7 +36,7 @@ def _load_version():
         with open(config_path, "rb") as f:
             cfg = tomllib.load(f)
         system = cfg.get("system", {})
-        _ANTEUMBRA_VERSION = system.get("version", "1.0.1")
+        _ANTEUMBRA_VERSION = system.get("version", "1.0.2")
         _ANTEUMBRA_RELEASE_DATE = system.get("release_date", "TBD")
     except Exception as e:
         _ANTEUMBRA_VERSION = "unknown"

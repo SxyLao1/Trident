@@ -30,9 +30,13 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # 使用测试实例路径（而非开发路径），确保数据目录一致
 RUNTIME_ROOT = Path(os.environ.get("TRIDENT_HOME", r"F:\Home\Recently\Trident_1.7.9"))
-sys.path.insert(0, str(RUNTIME_ROOT))
-os.environ["TRIDENT_TOOL_MODE"] = "true"
-os.chdir(str(RUNTIME_ROOT))  # 确保 data/ 目录正确
+
+# Only apply path/CWD changes when run directly, not during pytest collection
+_IN_E2E_MAIN = (__name__ == "__main__")
+if _IN_E2E_MAIN:
+    sys.path.insert(0, str(RUNTIME_ROOT))
+    os.environ["TRIDENT_TOOL_MODE"] = "true"
+    os.chdir(str(RUNTIME_ROOT))  # 确保 data/ 目录正确
 
 import requests
 
