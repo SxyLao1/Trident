@@ -26,11 +26,28 @@ def _init_path():
 
 
 def _load() -> List[Dict]:
-    """加载台账（优先缓存）"""
+    """加载台账 — v2.0: Repository-first, JSON fallback"""
     global _LEDGER_CACHE
     _init_path()
     if _LEDGER_CACHE:
         return _LEDGER_CACHE
+
+    # v2.0: Try Repository first (SQLite primary)
+    try:
+        from anteumbra.infrastructure.config.registry import ConfigRegistry
+        config = ConfigRegistry.get_raw_config()
+        backend = config.get("storage", {}).get("backend", "json")
+        if backend != "json":
+            from anteumbra.infrastructure.persistence import get_repository
+            repo = get_repository("block_ledger")
+            records = repo.list_all(limit=999999)
+            if records and any(r.get("ip") for r in records[:1]):
+                _LEDGER_CACHE = records
+                return records
+    except Exception:
+        pass
+
+    # Fallback: load from JSON file
     try:
         if _LEDGER_PATH.exists():
             data = json.loads(_LEDGER_PATH.read_text(encoding='utf-8'))
@@ -43,7 +60,7 @@ def _load() -> List[Dict]:
 
 
 def _save(data: List[Dict]):
-    """保存台账到磁盘"""
+    """保存台账到磁盘 — v2.0: JSON primary + Repository shadow"""
     global _LEDGER_CACHE
     _init_path()
     _LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -54,6 +71,28 @@ def _save(data: List[Dict]):
         _LEDGER_CACHE = data
     except Exception as e:
         logger.error(f"[BLOCK_LEDGER] 保存失败: {e}")
+
+    # v2.0: Shadow-write to Repository for storage.backend = sqlite / both
+    _repo_shadow_save(data)
+
+
+def _repo_shadow_save(data: List[Dict]):
+    """v2.0: Shadow-write block_ledger records to Repository interface.
+
+    Best-effort — failures are silently ignored.
+    """
+    try:
+        from anteumbra.infrastructure.persistence import get_repository
+        repo = get_repository("block_ledger")
+        for item in data:
+            key = item.get("ip", "")
+            if key:
+                try:
+                    repo.save(key, dict(item))
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 
 def add_entry(
