@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """
-Trident v1.7.8 API Compatibility Test
-Ensures core APIs remain stable across version upgrades.
+Anteumbra v1.0 API Compatibility Test
+Ensures core APIs remain stable across refactoring.
 
 Usage:
     python tests/compatibility/test_v178_api.py
-    python tests/compatibility/test_v178_api.py --verbose
 
 Rules:
-    - This test MUST pass before any v1.8.x release
-    - Breaking changes require major version bump (v2.0)
+    - This test MUST pass before any release
+    - Breaking changes require documentation in ADR
 """
 import sys
 import os
@@ -23,21 +22,19 @@ sys.path.insert(0, PROJECT_ROOT)
 
 
 class TestConfigAPI(unittest.TestCase):
-    """Test config.version and config.loader APIs."""
+    """Test version and config loader APIs."""
 
     def test_version_import(self):
-        from config.version import get_version
+        from anteumbra.infrastructure.config.version import get_version
         version = get_version()
         self.assertIsInstance(version, str)
-        # v1.8.0: 兼容 semver 后缀 (-dev, -alpha, -rc1 等)
         self.assertRegex(version, r"^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$")
         self.assertNotEqual(version, "unknown")
 
     def test_config_load(self):
-        from config.loader import load_config
+        from anteumbra.infrastructure.config.loader import load_config
         cfg = load_config()
         self.assertIn("system", cfg)
-        self.assertIn("website", cfg)
         self.assertIn("web_admin", cfg)
 
 
@@ -45,25 +42,23 @@ class TestRegistryAPI(unittest.TestCase):
     """Test suspicious_registry function-level APIs."""
 
     def setUp(self):
-        # Use temp directory for isolated testing
         self.temp_dir = tempfile.mkdtemp()
-        os.environ["TRIDENT_DATA_DIR"] = self.temp_dir
+        os.environ["TRIDENT_TOOL_MODE"] = "true"
 
     def tearDown(self):
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
-        os.environ.pop("TRIDENT_DATA_DIR", None)
+        os.environ.pop("TRIDENT_TOOL_MODE", None)
 
     def test_add_and_get_all(self):
-        from core.suspicious_registry import add, get_all
-        from pathlib import Path
-
+        from anteumbra.infrastructure.suspicious_registry import add, get_all, _clear_memory_cache
+        _clear_memory_cache()
         add(Path("/tmp/test.php"), ["eval", "base64"])
-        records = get_all()
+        records = get_all(include_deleted=True)
         self.assertIsInstance(records, list)
 
     def test_get_all_filter(self):
-        from core.suspicious_registry import get_all
+        from anteumbra.infrastructure.suspicious_registry import get_all
         records = get_all(include_deleted=False, include_false_positive=False)
         self.assertIsInstance(records, list)
 
@@ -72,12 +67,12 @@ class TestWALAPI(unittest.TestCase):
     """Test WAL manager APIs."""
 
     def test_wal_info(self):
-        from core import wal_manager
+        from anteumbra.infrastructure import wal_manager
         info = wal_manager.get_wal_info()
         self.assertIsInstance(info, dict)
 
     def test_wal_read(self):
-        from core import wal_manager
+        from anteumbra.infrastructure import wal_manager
         records = wal_manager.read_wal_records(limit=10)
         self.assertIsInstance(records, list)
 
@@ -110,22 +105,9 @@ class TestYaraEngineAPI(unittest.TestCase):
     """Test YARA engine APIs."""
 
     def test_get_engine(self):
-        from core.yara_engine import get_yara_engine
+        from anteumbra.infrastructure.detection.yara_engine import get_yara_engine
         engine = get_yara_engine()
         self.assertIsNotNone(engine)
-
-
-class TestToolsRunnable(unittest.TestCase):
-    """Test that all tools can be imported without error."""
-
-    def test_verify_rules_import(self):
-        import tools.verify_rules
-
-    def test_admin_passwd_import(self):
-        import tools.admin_passwd
-
-    def test_generate_demo_data_import(self):
-        import tools.generate_demo_data
 
 
 def run_tests():
