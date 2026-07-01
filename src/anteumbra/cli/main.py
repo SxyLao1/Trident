@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Anteumbra v2.0 CLI — unified command-line interface.
+Anteumbra v1.0 CLI — unified command-line interface.
 
 Usage:
   anteumbra run              Start all subsystems (foreground)

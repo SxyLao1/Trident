@@ -14,6 +14,7 @@ v1.9.3: Trident Plugin Manager
 """
 import importlib
 import logging
+import queue
 import threading
 from typing import Dict, List, Optional, Any
 
@@ -42,6 +43,7 @@ class PluginManager:
         self._enabled: bool = False
         self._config: Dict[str, Any] = {}
         self._dispatch_timeout = 30.0  # Max seconds per plugin on_event
+        self._event_queue: queue.Queue = queue.Queue()  # Fire-and-Forget event queue
 
     @classmethod
     def get_instance(cls) -> "PluginManager":
@@ -145,8 +147,8 @@ class PluginManager:
                            plugin.name, event.event_type, e)
         return new_events
 
-    def emit(self, event_type: str, source: str, payload: Dict[str, Any]) -> List[DomainEvent]:
-        """便捷方法：创建并分发事件"""
+    def emit(self, event_type: str, source: str, payload: Dict[str, Any]) -> None:
+        """Fire-and-Forget: 创建事件并入队（异步），立即返回 None"""
         import time
         event = DomainEvent(
             event_type=event_type,
@@ -154,7 +156,8 @@ class PluginManager:
             source=source,
             payload=payload,
         )
-        return self.dispatch(event)
+        self._event_queue.put(event)
+        return None
 
     # ── 查询 ────────────────────────────────────────────
 

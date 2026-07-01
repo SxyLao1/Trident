@@ -87,11 +87,14 @@ class TestPluginManager:
         assert new_events[0].event_type == "test.response"
 
     def test_emit_convenience(self):
+        """v2.0: emit() is Fire-and-Forget — returns None, events go to queue."""
         pm = PluginManager()
         pm._enabled = True
         pm.register(_TestPlugin("emitter"))
-        results = pm.emit("test.event", "unit_test", {"data": 42})
-        assert len(results) == 1
+        # emit() returns None (async Fire-and-Forget)
+        assert pm.emit("test.event", "unit_test", {"data": 42}) is None
+        # Event should be in the queue
+        assert pm._event_queue.qsize() == 1
 
     def test_disabled_manager(self):
         pm = PluginManager()

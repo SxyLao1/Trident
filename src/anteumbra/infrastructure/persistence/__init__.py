@@ -27,10 +27,11 @@ __all__ = ["JsonRepository", "SqliteRepository", "DualWriteRepository", "get_rep
 # ── Namespace → JSON file / SQLite table mapping ────────────
 
 _NAMESPACE_MAP: Dict[str, tuple] = {
-    "registry":        ("data/suspicious_registry.json", "file_path", "registry"),
-    "quarantine":      ("data/quarantine/quarantine.json", "quarantine_id", "quarantine"),
-    "block_ledger":    ("data/block_ledger.json", "ip", "block_ledger"),
-    "threat_profiles": ("data/threat_graph.json", "profile_id", "threat_profiles"),
+    # (json_file, json_key_field, sqlite_table, sqlite_key_column, sqlite_sort_column)
+    "registry":        ("data/suspicious_registry.json", "file_path",    "registry",        "record_id",     "detected_at"),
+    "quarantine":      ("data/quarantine/quarantine.json",  "quarantine_id", "quarantine",    "quarantine_id", "created_at"),
+    "block_ledger":    ("data/block_ledger.json",          "ip",           "block_ledger",   "ip",            "blocked_at"),
+    "threat_profiles": ("data/threat_graph.json",          "profile_id",   "threat_profiles", "profile_id",    "updated_at"),
 }
 
 # ── Singleton cache ─────────────────────────────────────────
@@ -62,7 +63,7 @@ def get_repository(namespace: str = "registry") -> Repository:
             raise ValueError(f"Unknown repository namespace: {namespace}. "
                              f"Valid: {list(_NAMESPACE_MAP.keys())}")
 
-        json_file, key_field, sqlite_table = _NAMESPACE_MAP[namespace]
+        json_file, key_field, sqlite_table, sqlite_key, sqlite_sort = _NAMESPACE_MAP[namespace]
 
         # Read storage backend from config
         try:
@@ -87,11 +88,11 @@ def get_repository(namespace: str = "registry") -> Repository:
             from anteumbra.infrastructure.utils.path_utils import normalize_path
             repo = JsonRepository(normalize_path(json_file), key_field=key_field)
         elif backend == "sqlite":
-            repo = SqliteRepository(db_path)
+            repo = SqliteRepository(db_path, table_name=sqlite_table, key_column=sqlite_key, sort_column=sqlite_sort)
         elif backend == "both":
             from anteumbra.infrastructure.utils.path_utils import normalize_path
             json_repo = JsonRepository(normalize_path(json_file), key_field=key_field)
-            sql_repo = SqliteRepository(db_path)
+            sql_repo = SqliteRepository(db_path, table_name=sqlite_table, key_column=sqlite_key, sort_column=sqlite_sort)
             repo = DualWriteRepository(json_repo, sql_repo)
         else:
             logger.warning("Unknown storage.backend '%s', falling back to json", backend)

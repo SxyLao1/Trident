@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Anteumbra v2.0 — Full Application Runner
+Anteumbra v1.0 — Full Application Runner
 Starts: Flask web server + File monitor + Log monitor + WAF poller + Profile consumer + Plugin system
 """
 import os, sys, time, threading, json, platform

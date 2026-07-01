@@ -85,7 +85,7 @@ def load_toml_config(config_path: str = "config.toml") -> Dict[str, Any]:
     config_file = Path(config_path).resolve()
 
     if not config_file.exists():
-        project_root = Path(__file__).resolve().parent.parent
+        project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
         config_file = project_root / "config.toml"
 
         if not config_file.exists():

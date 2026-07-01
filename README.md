@@ -4,7 +4,7 @@
 
 # Anteumbra
 
-<img src="https://img.shields.io/badge/version-1.0.0.dev0-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.1-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.8%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -96,6 +96,17 @@ Anteumbra is designed to complement these excellent open-source tools:
 **Hashing & Similarity**:
 - [ssdeep-project/ssdeep](https://github.com/ssdeep-project/ssdeep) — CTPH fuzzy hashing
 - [trendmicro/tlsh](https://github.com/trendmicro/tlsh) — Trend Micro Locality Sensitive Hash
+
+## Tools
+
+The `tools/` directory includes:
+
+- **WAF Proxy** (`tools/waf_proxy/`) — Lightweight HTTP reverse proxy with built-in WAF rules (SQLi, XSS, traversal, webshell upload, command injection). Generates attack events in JSON Lines format for the threat profiling engine. Useful for testing and development.
+
+```bash
+python tools/waf_proxy/waf_proxy.py            # :8081 → :80
+python tools/waf_proxy/waf_proxy.py 8081 8080  # custom ports
+```
 
 ## Migration from Trident
 

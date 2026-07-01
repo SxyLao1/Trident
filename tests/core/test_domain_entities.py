@@ -1,7 +1,7 @@
-"""Tests for core/domain/entities.py and core/domain/registry_adapter.py"""
+"""Tests for core/domain/entities.py and infrastructure/registry_adapter.py"""
 import pytest
 from anteumbra.domain.entities import FileRecord, DetectionSource, FileStatus, ScanResult, QuarantineRecord
-from anteumbra.domain.registry_adapter import RegistryRepository, get_registry_repository
+from anteumbra.infrastructure.registry_adapter import RegistryRepository, get_registry_repository
 
 
 class TestFileRecord:

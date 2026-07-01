@@ -1,6 +1,6 @@
 # Anteumbra Roadmap
 
-> **Current Version**: v1.0.0.dev0 (2026-06-30)  
+> **Current Version**: v1.0.1 (2026-07-01)  
 > **Vision**: Web Perimeter Threat Intelligence — Passive Detection · Semi-Active Response · File-Level Forensics  
 > **Status**: DDD architecture migrated, 79/79 tests passing, frontend bugs fixed
 

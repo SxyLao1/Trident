@@ -1,4 +1,4 @@
-# Anteumbra v2.0-alpha: Domain Ports
+# Anteumbra v1.0: Domain Ports
 from anteumbra.domain.plugin import Plugin, DomainEvent
 from anteumbra.domain.detector import Detector, ScanRequest, ScanResult
 from anteumbra.domain.repository import Repository, EventRepository

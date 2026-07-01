@@ -43,8 +43,10 @@ def _get_quarantine_dir() -> Path:
     """获取隔离目录路径，不存在则自动创建"""
     global _quarantine_dir
     if _quarantine_dir is None:
-        project_root = Path(__file__).resolve().parent.parent
-        _quarantine_dir = project_root / "quarantine"
+        from anteumbra.infrastructure.config.registry import ConfigRegistry
+        config = ConfigRegistry.get_raw_config()
+        quarantine_dir_name = config.get("quarantine_dir", "quarantine")
+        _quarantine_dir = normalize_path(quarantine_dir_name)
     _quarantine_dir.mkdir(parents=True, exist_ok=True)
     return _quarantine_dir
 

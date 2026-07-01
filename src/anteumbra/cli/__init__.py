@@ -1,1 +1,1 @@
-"""Anteumbra CLI — unified command-line interface for v2.0."""
+"""Anteumbra CLI — unified command-line interface for v1.0."""

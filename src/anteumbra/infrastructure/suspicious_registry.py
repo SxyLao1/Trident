@@ -512,6 +512,7 @@ def _repo_shadow_save(data: List[Dict]):
 
 def _save_registry_sync(data: List[Dict]):
     """同步保存注册表（Windows终极版：关闭所有句柄后替换）"""
+    logger = _get_logger()
     global _save_lock
 
     with _save_lock:

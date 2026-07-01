@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-v2.0-alpha: Domain Entities — Pydantic models for core business objects.
+v1.0: Domain Entities — Pydantic models for core business objects.
 
 Design principles:
   - Immutable where possible (frozen=True for value objects)
@@ -47,7 +47,7 @@ if _HAS_PYDANTIC:
     class FileRecord(BaseModel):
         """Core domain entity: a detected suspicious file."""
         file_path: str = Field(..., description="Absolute path (normalized)")
-        display_name: str = Field(default="", description="Filename only")
+        display_name: Optional[str] = Field(default=None, description="Filename only")
         detected_at: str = Field(
             default_factory=lambda: datetime.now(timezone.utc).isoformat())
         features: List[str] = Field(default_factory=list)
@@ -67,6 +67,11 @@ if _HAS_PYDANTIC:
         @classmethod
         def normalize_path(cls, v: str) -> str:
             return v.replace("\\", "/")
+
+        @field_validator("display_name", mode="before")
+        @classmethod
+        def coerce_display_name(cls, v) -> str:
+            return v or ""
 
         @model_validator(mode="after")
         def auto_display_name(self):

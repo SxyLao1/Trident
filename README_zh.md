@@ -4,7 +4,7 @@
 
 # Anteumbra · 本影
 
-<img src="https://img.shields.io/badge/version-1.0.0.dev0-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.1-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.8%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -96,6 +96,17 @@ Anteumbra 与以下优秀开源工具互补：
 **哈希与相似度**：
 - [ssdeep-project/ssdeep](https://github.com/ssdeep-project/ssdeep) — CTPH 模糊哈希
 - [trendmicro/tlsh](https://github.com/trendmicro/tlsh) — Trend Micro 局部敏感哈希
+
+## 附赠工具
+
+`tools/` 目录包含：
+
+- **WAF 代理** (`tools/waf_proxy/`) — 轻量级 HTTP 反向代理，内置 WAF 规则（SQLi、XSS、路径遍历、WebShell 上传、命令注入）。以 JSON Lines 格式生成攻击事件，供威胁画像引擎消费。适用于测试和开发。
+
+```bash
+python tools/waf_proxy/waf_proxy.py            # :8081 → :80
+python tools/waf_proxy/waf_proxy.py 8081 8080  # 自定义端口
+```
 
 ## 从 Trident 迁移
 

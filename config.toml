@@ -1,5 +1,5 @@
 [system]
-version = "1.9.5-dev"
+version = "1.0.1"
 release_date = "TBD"
 
 project_root = "."
@@ -508,10 +508,14 @@ db_path = "data/trident.db"
 enabled = true
 
 # 内置插件列表（PluginManager 启动时自动加载）
-# 可用: stdout_logger, waf_adapters.modsecurity, waf_adapters.cloudflare,
+# 可用: stdout_logger, quarantine_handler, notifier_handler,
+#       waf_adapters.modsecurity, waf_adapters.cloudflare,
 #       waf_adapters.aws_waf, waf_adapters.syslog_waf
 builtin = [
     "stdout_logger",
+    "quarantine_handler",
+    "notifier_handler",
+    "threat_graph_handler",
 ]
 
 # 单插件配置
@@ -522,7 +526,7 @@ verbose = false
 # WAF 适配器 — ModSecurity JSON 审计日志
 [plugins.modsecurity]
 enabled = false
-audit_log_path = "/var/log/modsec_audit.log"
+audit_log_path = "data/modsec_audit.log"
 poll_interval = 5
 min_score = 5.0
 

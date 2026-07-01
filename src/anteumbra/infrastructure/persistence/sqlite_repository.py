@@ -40,6 +40,8 @@ SCHEMA = {
             marked_false_positive INTEGER DEFAULT 0,
             false_positive_at TEXT,
             quarantine_id TEXT,
+            quarantined_at TEXT,
+            profile_id TEXT,
             deleted_at TEXT,
             detection_source TEXT DEFAULT 'passive',
             raw_json TEXT,              -- 完整 JSON 备份（兼容性）
@@ -114,6 +116,16 @@ SCHEMA = {
             updated_at TEXT DEFAULT (datetime('now'))
         )
     """,
+    "wal_events": """
+        CREATE TABLE IF NOT EXISTS wal_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            source TEXT,
+            payload TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """,
 }
 
 # 索引（加速常见查询）
@@ -132,13 +144,30 @@ INDEXES = [
 # ── SqliteRepository ──────────────────────────────────────
 
 class SqliteRepository(EventRepository):
-    """基于 SQLite 的数据仓库，实现 Repository + EventRepository 接口"""
+    """基于 SQLite 的数据仓库，实现 Repository + EventRepository 接口
 
-    def __init__(self, db_path: str = "data/trident.db"):
+    v2.0 fix: ``table_name`` parameter routes data to the correct table.
+    Previously every namespace (registry, quarantine, block_ledger,
+    threat_profiles) was hardcoded to INSERT INTO ``registry``.
+    """
+
+    def __init__(self, db_path: str = "data/trident.db", table_name: str = "registry",
+                 key_column: str = "record_id", sort_column: str = "detected_at"):
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._table = table_name
+        self._key_column = key_column
+        self._sort_column = sort_column
         self._local = threading.local()
         self._ensure_schema()
+        # Cache column names for the target table (used in save() filtering)
+        self._columns = self._discover_columns()
+
+    def _discover_columns(self) -> set:
+        """Return the set of column names actually present in ``self._table``."""
+        conn = self._get_conn()
+        rows = conn.execute(f"PRAGMA table_info({self._table})").fetchall()
+        return {r["name"] for r in rows}
 
     # ── 连接管理 ────────────────────────────────────────
 
@@ -166,32 +195,41 @@ class SqliteRepository(EventRepository):
     # ── Repository 接口 ──────────────────────────────────
 
     def save(self, record_id: str, data: Dict[str, Any]) -> None:
-        """保存或更新一条记录（自动判断 INSERT vs UPDATE）"""
+        """保存或更新一条记录（自动判断 INSERT vs UPDATE）
+
+        v2.0 fix: Routes to correct table (self._table) and filters unknown
+        columns so extra data-dict fields don't cause "no column named X".
+        """
         conn = self._get_conn()
-        # 将复杂字段序列化为 JSON 字符串
         row = dict(data)
         for k, v in row.items():
             if isinstance(v, (list, dict)):
                 row[k] = json.dumps(v, ensure_ascii=False, default=str)
-        row["record_id"] = record_id
+        row[self._key_column] = record_id
 
-        columns = list(row.keys())
-        placeholders = [f":{c}" for c in columns]
-        updates = [f"{c}=excluded.{c}" for c in columns if c != "record_id"]
+        # Filter to only columns that actually exist in the table
+        known = sorted(c for c in row if c in self._columns)
+        placeholders = [f":{c}" for c in known]
+        updates = [f"{c}=excluded.{c}" for c in known if c != self._key_column]
 
-        sql = f"INSERT INTO registry ({','.join(columns)}) VALUES ({','.join(placeholders)}) ON CONFLICT(record_id) DO UPDATE SET {','.join(updates)}, updated_at=datetime('now')"
-        conn.execute(sql, row)
+        sql = f"INSERT INTO {self._table} ({','.join(known)}) VALUES ({','.join(placeholders)}) ON CONFLICT({self._key_column}) DO UPDATE SET {','.join(updates)}"
+        # Append updated_at only if the column exists
+        if "updated_at" in self._columns:
+            sql += ", updated_at=datetime('now')"
+        conn.execute(sql, {c: row[c] for c in known})
         conn.commit()
 
     def get(self, record_id: str) -> Optional[Dict[str, Any]]:
         conn = self._get_conn()
-        row = conn.execute("SELECT * FROM registry WHERE record_id=?", (record_id,)).fetchone()
+        row = conn.execute(
+            f"SELECT * FROM {self._table} WHERE {self._key_column}=?", (record_id,)
+        ).fetchone()
         return dict(row) if row else None
 
     def list_all(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         conn = self._get_conn()
         rows = conn.execute(
-            "SELECT * FROM registry ORDER BY detected_at DESC LIMIT ? OFFSET ?",
+            f"SELECT * FROM {self._table} ORDER BY {self._sort_column} DESC LIMIT ? OFFSET ?",
             (limit, offset)).fetchall()
         return [dict(r) for r in rows]
 
@@ -214,28 +252,33 @@ class SqliteRepository(EventRepository):
                 raise ValueError(f"Invalid filter column: {k}")
             where.append(f"{k}=?")
             params.append(v)
-        sql = "SELECT * FROM registry"
+        sql = f"SELECT * FROM {self._table}"
         if where:
             sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY detected_at DESC LIMIT ? OFFSET ?"
+        sql += f" ORDER BY {self._sort_column} DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
     def delete(self, record_id: str) -> bool:
         conn = self._get_conn()
-        cur = conn.execute("DELETE FROM registry WHERE record_id=?", (record_id,))
+        cur = conn.execute(
+            f"DELETE FROM {self._table} WHERE {self._key_column}=?", (record_id,)
+        )
         conn.commit()
         return cur.rowcount > 0
 
     def count(self, filters: Optional[Dict[str, Any]] = None) -> int:
         conn = self._get_conn()
         if filters:
+            for k in filters:
+                if k not in self._ALLOWED_COLUMNS:
+                    raise ValueError(f"Invalid filter column: {k}")
             where = " WHERE " + " AND ".join(f"{k}=?" for k in filters)
             params = list(filters.values())
-            row = conn.execute(f"SELECT COUNT(*) FROM registry{where}", params).fetchone()
+            row = conn.execute(f"SELECT COUNT(*) FROM {self._table}{where}", params).fetchone()
         else:
-            row = conn.execute("SELECT COUNT(*) FROM registry").fetchone()
+            row = conn.execute(f"SELECT COUNT(*) FROM {self._table}").fetchone()
         return row[0] if row else 0
 
     # ── EventRepository 接口 ─────────────────────────────
