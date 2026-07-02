@@ -4,22 +4,28 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anteumbra"
-version = "1.0.2"
-description = "Anteumbra — Web Perimeter Threat Intelligence. Passive detection, semi-active response, file-level forensics."
-requires-python = ">=3.8"
-license = "MIT"
+version = "1.0.4"
+description = "Anteumbra — Web Perimeter Threat Intelligence. Passive detection, semi-active response, attacker profiling."
+requires-python = ">=3.10"
+license = {text = "MIT"}
 authors = [{name = "SxyLao1"}]
-keywords = ["webshell", "security", "detection", "yara", "waf", "forensics"]
+keywords = ["webshell", "security", "detection", "yara", "waf", "forensics", "threat-intel", "profiling"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Web Environment",
+    "Framework :: Flask",
     "Intended Audience :: System Administrators",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Operating System :: Microsoft :: Windows",
-    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Security",
+    "Topic :: Internet :: Log Analysis",
 ]
+readme = "README.md"
 
 dependencies = [
     "flask>=2.3.3,<3.0.0",
@@ -40,8 +46,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "pytest-cov"]
+dev = ["pytest>=7.0", "pytest-cov", "playwright>=1.40"]
 yara = ["yara-python>=4.3.0"]
+full = ["yara-python>=4.3.0", "ssdeep", "py-tlsh"]
 
 [project.scripts]
 anteumbra = "anteumbra.__main__:main"

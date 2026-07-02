@@ -4,11 +4,11 @@
 
 # Anteumbra
 
-<img src="https://img.shields.io/badge/version-1.0.1-blue?style=flat-square" alt="Version">
-<img src="https://img.shields.io/badge/python-3.8%2B-green?style=flat-square" alt="Python">
+<img src="https://img.shields.io/badge/version-1.0.4-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
-<img src="https://img.shields.io/badge/tests-79%2F79-brightgreen?style=flat-square" alt="Tests">
+<img src="https://img.shields.io/badge/tests-144%2F144-brightgreen?style=flat-square" alt="Tests">
 
 **Lightweight Web Perimeter Security** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -29,18 +29,20 @@ Key capabilities:
 - **YARA rule engine** — 18+ rule files covering PHP, ASP, JSP, ASPX, Godzilla, Behinder; hot-reload supported
 - **Threat profiling** — Attacker behavior clustering via UA/time-bucket, IP pool merging, decay engine
 - **File similarity clustering** — ssdeep/TLSH/SimHash hash engine with 0.80 threshold grouping
+- **IP block ledger** — Audit trail for all block/unblock operations, inline note editing, JSON/CSV export
+- **Bidirectional linking** — Profile ↔ Records ↔ Quarantine cross-navigation, attack chain timeline
 - **Log heuristic engine** — Behavior-level detection: brute force, scanner, error storm, tool signature, suspicious path
 - **Memory shell detection** — Java/ASP.NET reference tools + access log tracer for WebShell origin correlation
 - **Batch operations** — Cross-page multi-select for Records/Quarantine with batch quarantine/restore/delete
 - **SIEM export** — CEF/JSON Lines/Syslog formats with file rotation and real-time UDP streaming
 - **Plugin system** — Config-driven plugin manager with lifecycle, event dispatch, 4 WAF adapters
-- **Dual storage** — JSON + SQLite (WAL mode) with configurable backend switching and auto-migration
+- **Dual storage** — JSON + SQLite (WAL mode, FK constraints, indexed) with configurable backend switching
 - **WAL transaction logs** — Async batch writes with auto rotation, minimal data loss under file locking
 - **Smart alerting** — Exponential backoff with adaptive thresholds to reduce false positives
 - **Web dashboard** — Dark theme terminal-style interface, SSE real-time log stream, HTMX-driven, SPA navigation
 - **Enterprise security** — CSRF protection, IP whitelist, Scrypt password hashing, static JS auth guard
-- **Production deployment** — Gunicorn multi-worker config, systemd service, `pip install -e .` dev setup
-- **Core test suite** — 79 tests across 7 modules, one-click Windows runner
+- **Production deployment** — Docker multi-stage build, Gunicorn multi-worker, systemd service, `pip install -e .`
+- **Comprehensive test suite** — 144 tests: 88 unit + 21 E2E backend + 34 E2E UI (Playwright) + 1 WAF proxy
 
 ## Quick Start
 
@@ -66,6 +68,28 @@ cd Anteumbra
 .\run_tests.bat
 ```
 
+### Docker
+
+```bash
+docker build -t anteumbra .
+docker run -d -p 8080:8080 -v $(pwd)/data:/app/data -v $(pwd)/config.toml:/app/config.toml anteumbra
+```
+
+Docker Compose:
+
+```yaml
+services:
+  anteumbra:
+    build: .
+    ports: ["8080:8080"]
+    volumes:
+      - ./data:/app/data
+      - ./config.toml:/app/config.toml
+    restart: unless-stopped
+```
+
+The Docker image includes all three hash engines (ssdeep + py-tlsh + yara-python) compiled and active for Linux.
+
 Then open `http://127.0.0.1:5000/admin`. Default username is `admin`; password is printed in the console during first setup.
 
 ## Architecture
@@ -78,7 +102,7 @@ src/anteumbra/
 └── interfaces/           # Interfaces: Flask blueprints, templates, static assets
 ```
 
-Architecture follows Domain-Driven Design with four separated layers.
+Architecture follows Domain-Driven Design with four separated layers. Event-driven architecture (EDA) covers 85%+ of the data flow via implicit event bus (PluginManager with emit/dispatch semantics). SQLite storage layer features foreign key constraints (ON DELETE SET NULL) and 13 indexed columns.
 
 ## Ecosystem & Related Projects
 
@@ -137,5 +161,5 @@ Third-party tools bundled in `tools/` retain their original licenses.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0 — MIT License</sub>
+  <sub>Anteumbra v1.0.4 — MIT License</sub>
 </div>

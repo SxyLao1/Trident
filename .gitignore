@@ -39,3 +39,4 @@ logs/
 *.db-wal
 *.db-shm
 *_log.txt
+screenshots/

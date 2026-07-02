@@ -4,11 +4,11 @@
 
 # Anteumbra · 本影
 
-<img src="https://img.shields.io/badge/version-1.0.1-blue?style=flat-square" alt="Version">
-<img src="https://img.shields.io/badge/python-3.8%2B-green?style=flat-square" alt="Python">
+<img src="https://img.shields.io/badge/version-1.0.4-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
-<img src="https://img.shields.io/badge/tests-79%2F79-brightgreen?style=flat-square" alt="Tests">
+<img src="https://img.shields.io/badge/tests-144%2F144-brightgreen?style=flat-square" alt="Tests">
 
 **轻量级 Web 边界威胁情报** — 被动检测 · 半主动响应 · 文件级取证
 
@@ -29,18 +29,20 @@ Anteumbra（前身 Trident）是一款面向 Linux 和 Windows 的**生产级 We
 - **YARA 规则引擎** — 18+ 规则文件覆盖 PHP/ASP/JSP/ASPX/哥斯拉/冰蝎，支持热重载
 - **威胁画像** — 攻击者行为聚类（UA/时间分桶），IP 池合并，衰减引擎
 - **文件相似度聚类** — ssdeep/TLSH/SimHash 哈希引擎，0.80 阈值分组
+- **IP 封禁台账** — 所有封禁/解封操作审计追踪，内联备注编辑，JSON/CSV 导出
+- **双向链接** — 画像 ↔ 检测记录 ↔ 隔离文件交叉导航，攻击链时间线
 - **日志启发引擎** — 行为级检测：暴力破解、扫描器、错误风暴、工具指纹、可疑路径
 - **内存马检测** — Java/ASP.NET 参考工具 + 访问日志追踪器，关联 WebShell 来源
 - **批量操作** — 跨页多选 Records/Quarantine，批量隔离/恢复/删除
 - **SIEM 导出** — CEF/JSON Lines/Syslog 格式，文件轮转，实时 UDP 流
 - **插件系统** — 配置驱动插件管理器，生命周期管理，事件分发，4 个 WAF 适配器
-- **双存储引擎** — JSON + SQLite (WAL 模式)，可配置后端切换，自动迁移
+- **双存储引擎** — JSON + SQLite（WAL 模式，外键约束，13 列索引），可配置后端切换
 - **WAL 事务日志** — 异步批量写入，自动轮转，文件锁下最小数据丢失
 - **智能告警** — 指数退避 + 自适应阈值，降低误报噪音
 - **Web 管理面板** — 暗色终端风界面，SSE 实时日志流，HTMX 驱动，SPA 导航
 - **企业安全** — CSRF 防护，IP 白名单，Scrypt 密码哈希，静态 JS 鉴权守卫
-- **生产部署** — Gunicorn 多 Worker 配置，systemd 服务，`pip install -e .` 开发模式
-- **核心测试套件** — 79 个测试覆盖 7 个模块，一键 Windows 运行
+- **生产部署** — Docker 多阶段构建，Gunicorn 多 Worker，systemd 服务，`pip install -e .` 开发模式
+- **全面测试** — 144 个测试：88 单元 + 21 E2E 后端 + 34 E2E UI (Playwright) + 1 WAF 代理
 
 ## 快速开始
 
@@ -66,6 +68,28 @@ cd Anteumbra
 .\run_tests.bat
 ```
 
+### Docker
+
+```bash
+docker build -t anteumbra .
+docker run -d -p 8080:8080 -v $(pwd)/data:/app/data -v $(pwd)/config.toml:/app/config.toml anteumbra
+```
+
+Docker Compose:
+
+```yaml
+services:
+  anteumbra:
+    build: .
+    ports: ["8080:8080"]
+    volumes:
+      - ./data:/app/data
+      - ./config.toml:/app/config.toml
+    restart: unless-stopped
+```
+
+Docker 镜像包含全部三轨哈希引擎（ssdeep + py-tlsh + yara-python），在 Linux 下编译并激活。
+
 然后打开 `http://127.0.0.1:5000/admin`。默认用户名 `admin`，密码在首次启动时打印在控制台中。
 
 ## 架构
@@ -78,7 +102,7 @@ src/anteumbra/
 └── interfaces/           # 接口层：Flask 蓝图、模板、静态资源
 ```
 
-架构采用领域驱动设计，四层分离。
+架构采用领域驱动设计，四层分离。事件驱动架构（EDA）通过隐式事件总线（PluginManager emit/dispatch 语义）覆盖 85%+ 数据流。SQLite 存储层支持外键约束（ON DELETE SET NULL）和 13 列索引。
 
 ## 生态与相关项目
 
@@ -137,5 +161,5 @@ MIT License。自由用于生产环境、学术研究和个人使用。
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0 — MIT License</sub>
+  <sub>Anteumbra v1.0.4 — MIT License</sub>
 </div>
