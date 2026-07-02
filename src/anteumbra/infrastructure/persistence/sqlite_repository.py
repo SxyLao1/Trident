@@ -6,8 +6,15 @@ v1.9.2: SQLite 仓库实现
 特性：
   - WAL 模式（高并发读）
   - 线程安全（threading.local 连接池）
-  - 自动建表（首次启动）
+  - 自动建表 + 迁移（首次启动 / 升级）
+  - 外键约束（ON DELETE SET NULL）
   - 双写模式兼容（与 JSON 并行写入）
+
+v1.0.4 优化:
+  - 3 条外键约束 (registry → quarantine/threat_profiles, block_ledger → threat_profiles)
+  - 5 条新索引 (profile_id, deleted_at, blocked_at, status, last_seen)
+  - 表创建顺序保证引用完整性
+  - 自动迁移：检测缺失 FK → 重建受影响的表
 """
 import json
 import logging
@@ -22,8 +29,47 @@ from anteumbra.domain import Repository, EventRepository
 logger = logging.getLogger(__name__)
 
 # ── SQL Schema ────────────────────────────────────────────
+# 表顺序有讲究：被引用的表必须先创建，否则 FK 约束会失败。
+# quarantine → threat_profiles → registry / block_ledger → scan_history → wal_events
+
+SCHEMA_VERSION = 2  # 递增以触发迁移
 
 SCHEMA = {
+    # ── 独立表（被其他表引用）─────────────────────────────
+    "quarantine": """
+        CREATE TABLE IF NOT EXISTS quarantine (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            quarantine_id TEXT UNIQUE NOT NULL,
+            original_path TEXT NOT NULL,
+            quarantine_path TEXT,
+            rule_name TEXT,
+            features TEXT,              -- JSON array
+            file_size INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'quarantined',
+            created_at TEXT DEFAULT (datetime('now')),
+            restored_at TEXT,
+            raw_json TEXT
+        )
+    """,
+    "threat_profiles": """
+        CREATE TABLE IF NOT EXISTS threat_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            profile_id TEXT UNIQUE NOT NULL,
+            ua_fingerprint TEXT,
+            tool_signature TEXT,
+            risk_score REAL DEFAULT 0,
+            ip_pool TEXT,               -- JSON array
+            target_files TEXT,          -- JSON array
+            target_urls TEXT,           -- JSON array
+            attack_chain TEXT,          -- JSON array
+            status TEXT DEFAULT 'active',
+            decay_factor REAL DEFAULT 1.0,
+            last_seen TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """,
+    # ── 依赖表（引用 quarantine / threat_profiles）─────────
     "registry": """
         CREATE TABLE IF NOT EXISTS registry (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,22 +92,9 @@ SCHEMA = {
             detection_source TEXT DEFAULT 'passive',
             raw_json TEXT,              -- 完整 JSON 备份（兼容性）
             created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now'))
-        )
-    """,
-    "quarantine": """
-        CREATE TABLE IF NOT EXISTS quarantine (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            quarantine_id TEXT UNIQUE NOT NULL,
-            original_path TEXT NOT NULL,
-            quarantine_path TEXT,
-            rule_name TEXT,
-            features TEXT,              -- JSON array
-            file_size INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'quarantined',
-            created_at TEXT DEFAULT (datetime('now')),
-            restored_at TEXT,
-            raw_json TEXT
+            updated_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (quarantine_id) REFERENCES quarantine(quarantine_id) ON DELETE SET NULL,
+            FOREIGN KEY (profile_id) REFERENCES threat_profiles(profile_id) ON DELETE SET NULL
         )
     """,
     "block_ledger": """
@@ -76,9 +109,11 @@ SCHEMA = {
             broadcast_devices TEXT,     -- JSON array
             broadcast_status TEXT DEFAULT 'success',
             blocked_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now'))
+            updated_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (profile_id) REFERENCES threat_profiles(profile_id) ON DELETE SET NULL
         )
     """,
+    # ── 独立日志表 ──────────────────────────────────────
     "scan_history": """
         CREATE TABLE IF NOT EXISTS scan_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,24 +133,6 @@ SCHEMA = {
             created_at TEXT DEFAULT (datetime('now'))
         )
     """,
-    "threat_profiles": """
-        CREATE TABLE IF NOT EXISTS threat_profiles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            profile_id TEXT UNIQUE NOT NULL,
-            ua_fingerprint TEXT,
-            tool_signature TEXT,
-            risk_score REAL DEFAULT 0,
-            ip_pool TEXT,               -- JSON array
-            target_files TEXT,          -- JSON array
-            target_urls TEXT,           -- JSON array
-            attack_chain TEXT,          -- JSON array
-            status TEXT DEFAULT 'active',
-            decay_factor REAL DEFAULT 1.0,
-            last_seen TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now'))
-        )
-    """,
     "wal_events": """
         CREATE TABLE IF NOT EXISTS wal_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,15 +147,36 @@ SCHEMA = {
 
 # 索引（加速常见查询）
 INDEXES = [
+    # registry — 高频查询列
     "CREATE INDEX IF NOT EXISTS idx_registry_file_path ON registry(file_path)",
     "CREATE INDEX IF NOT EXISTS idx_registry_quarantine ON registry(quarantine_id)",
+    "CREATE INDEX IF NOT EXISTS idx_registry_profile ON registry(profile_id)",
     "CREATE INDEX IF NOT EXISTS idx_registry_detected ON registry(detected_at)",
+    "CREATE INDEX IF NOT EXISTS idx_registry_deleted ON registry(deleted_at)",
+    # quarantine
     "CREATE INDEX IF NOT EXISTS idx_quarantine_status ON quarantine(status)",
+    # block_ledger
     "CREATE INDEX IF NOT EXISTS idx_block_ledger_ip ON block_ledger(ip)",
     "CREATE INDEX IF NOT EXISTS idx_block_ledger_source ON block_ledger(source)",
+    "CREATE INDEX IF NOT EXISTS idx_block_ledger_time ON block_ledger(blocked_at)",
+    # scan_history
     "CREATE INDEX IF NOT EXISTS idx_scan_history_time ON scan_history(start_time)",
+    # threat_profiles — 排序 + 筛选
     "CREATE INDEX IF NOT EXISTS idx_threat_profiles_score ON threat_profiles(risk_score)",
+    "CREATE INDEX IF NOT EXISTS idx_threat_profiles_status ON threat_profiles(status)",
+    "CREATE INDEX IF NOT EXISTS idx_threat_profiles_last_seen ON threat_profiles(last_seen)",
 ]
+
+# 外键期望清单 — 用于迁移检测
+_EXPECTED_FOREIGN_KEYS = {
+    "registry": {
+        ("quarantine_id", "quarantine", "quarantine_id"),
+        ("profile_id", "threat_profiles", "profile_id"),
+    },
+    "block_ledger": {
+        ("profile_id", "threat_profiles", "profile_id"),
+    },
+}
 
 
 # ── SqliteRepository ──────────────────────────────────────
@@ -183,14 +221,74 @@ class SqliteRepository(EventRepository):
         return self._local.conn
 
     def _ensure_schema(self):
-        """建表 + 索引（幂等）"""
+        """建表 + 索引 + 迁移（幂等）"""
         conn = self._get_conn()
         for table_name, ddl in SCHEMA.items():
             conn.execute(ddl)
         for idx in INDEXES:
             conn.execute(idx)
         conn.commit()
+        self._run_migrations()
         logger.info("SqliteRepository: schema ready at %s", self._db_path)
+
+    def _run_migrations(self):
+        """检测并添加缺失的外键约束（表重建实现）。
+
+        SQLite 不支持 ALTER TABLE ADD CONSTRAINT FK，
+        所以采用 CREATE...INSERT...DROP...RENAME 重建。
+        幂等：外键已齐全则跳过。
+        """
+        conn = self._get_conn()
+
+        for table_name, expected_fks in _EXPECTED_FOREIGN_KEYS.items():
+            # 检查当前外键
+            existing = conn.execute(
+                f"PRAGMA foreign_key_list({table_name})"
+            ).fetchall()
+            existing_set = {(r["from"], r["table"], r["to"]) for r in existing}
+
+            if existing_set >= expected_fks:
+                continue  # 外键已齐全
+
+            logger.info(
+                "[MIGRATE] %s — adding %d FK constraint(s) (current: %d)",
+                table_name, len(expected_fks), len(existing_set)
+            )
+
+            # 1) 从 SCHEMA 提取 DDL，替换表名生成带 FK 的新表
+            ddl = SCHEMA[table_name]
+            temp_name = f"{table_name}_v2"
+            new_ddl = ddl.replace(
+                f"CREATE TABLE IF NOT EXISTS {table_name}",
+                f"CREATE TABLE {temp_name}"
+            )
+
+            conn.execute(f"DROP TABLE IF EXISTS {temp_name}")
+            conn.execute(new_ddl)
+
+            # 2) 复制数据（列名从旧表 PRAGMA 获取，保证兼容）
+            columns = conn.execute(
+                f"PRAGMA table_info({table_name})"
+            ).fetchall()
+            col_names = [c["name"] for c in columns]
+            cols_str = ", ".join(col_names)
+            conn.execute(
+                f"INSERT INTO {temp_name} ({cols_str}) "
+                f"SELECT {cols_str} FROM {table_name}"
+            )
+
+            # 3) 替换旧表
+            conn.execute(f"DROP TABLE {table_name}")
+            conn.execute(f"ALTER TABLE {temp_name} RENAME TO {table_name}")
+
+            # 4) 重建索引
+            for idx_sql in INDEXES:
+                if table_name in idx_sql:
+                    conn.execute(idx_sql)
+
+            logger.info("[MIGRATE] %s — FK constraints added", table_name)
+
+        conn.commit()
 
     # ── Repository 接口 ──────────────────────────────────
 
