@@ -1,0 +1,138 @@
+# -*- coding: utf-8 -*-
+"""
+E2E UI Tests — shared fixtures (Playwright + Flask test server)
+
+Each test gets a FRESH Flask server (function scope) to avoid state
+accumulation that causes intermittent timeouts.
+"""
+import os
+import sys
+import socket
+import threading
+import time
+from pathlib import Path
+
+import pytest
+from werkzeug.security import generate_password_hash
+from playwright.sync_api import sync_playwright
+
+
+TEST_PASSWORD = "test_anteumbra"
+TEST_HASH = generate_password_hash(TEST_PASSWORD)
+
+# ── Session-scoped browser (expensive to restart) ─────────────
+_pw_instance = None
+_browser_instance = None
+
+
+def _find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+@pytest.fixture(scope="session")
+def browser():
+    """Launch Playwright Chromium once for the whole session."""
+    global _pw_instance, _browser_instance
+    _pw_instance = sync_playwright().start()
+    _browser_instance = _pw_instance.chromium.launch(headless=True)
+    yield _browser_instance
+    _browser_instance.close()
+    _pw_instance.stop()
+
+
+@pytest.fixture
+def server_url(monkeypatch):
+    """Start a FRESH Flask app for each test — no state accumulation."""
+    os.environ["TRIDENT_TOOL_MODE"] = "true"
+    os.environ["PYTEST_CURRENT_TEST"] = "true"
+    os.environ.setdefault("TRIDENT_HOME", "")
+
+    # Monkey-patch credentials
+    import anteumbra.interfaces.web.auth as auth_mod
+    original_get_creds = auth_mod.get_admin_credentials
+
+    def _test_credentials():
+        return ("admin", TEST_HASH, ["127.0.0.1"])
+
+    auth_mod.get_admin_credentials = _test_credentials
+
+    project_root = Path(__file__).resolve().parent.parent.parent
+    sys.path.insert(0, str(project_root))
+
+    # Reset singleton
+    import anteumbra.interfaces.web.factory as factory_mod
+    factory_mod._app_instance = None
+
+    from anteumbra.interfaces.web.factory import create_app
+    app = create_app()
+    app.config["TESTING"] = True
+    app.config["SERVER_NAME"] = None
+
+    port = _find_free_port()
+    base_url = f"http://127.0.0.1:{port}"
+
+    server_thread = threading.Thread(
+        target=app.run,
+        kwargs={"host": "127.0.0.1", "port": port, "threaded": True, "debug": False},
+        daemon=True,
+    )
+    server_thread.start()
+
+    import requests
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        try:
+            r = requests.get(f"{base_url}/admin/login", timeout=1)
+            if r.status_code in (200, 302, 401, 403):
+                break
+        except Exception:
+            time.sleep(0.2)
+    else:
+        raise RuntimeError(f"Flask server did not start on {base_url}")
+
+    yield base_url
+
+    # Teardown
+    auth_mod.get_admin_credentials = original_get_creds
+    factory_mod._app_instance = None
+
+
+@pytest.fixture
+def page(server_url, browser):
+    """Authenticated page — fresh context per test."""
+    context = browser.new_context(viewport={"width": 1440, "height": 900})
+    pg = context.new_page()
+
+    # Login
+    pg.goto(f"{server_url}/admin/login")
+    pg.wait_for_selector("form.login-form", timeout=5000)
+    pg.fill("input[name='username']", "admin")
+    pg.fill("input[name='password']", TEST_PASSWORD)
+    pg.click("button.login-btn")
+    pg.wait_for_url("**/admin/", timeout=5000)
+
+    yield pg
+    context.close()
+
+
+@pytest.fixture
+def unauthenticated_page(server_url, browser):
+    """Clean page — no login."""
+    context = browser.new_context(viewport={"width": 1440, "height": 900})
+    pg = context.new_page()
+    yield pg
+    context.close()
+
+
+# ── Helper: navigate without waiting for CDN scripts ───────────
+def go(page, url, **kw):
+    """Navigate to target URL cleanly: first unload the current page
+    (killing any active SSE connections), then go to the target.
+    Uses wait_until='commit' to avoid blocking on CDN <script> tags."""
+    kw.setdefault("wait_until", "commit")
+    kw.setdefault("timeout", 20000)
+    page.goto("about:blank", wait_until="commit", timeout=10000)
+    page.wait_for_timeout(200)
+    return page.goto(url, **kw)
